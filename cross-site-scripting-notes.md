@@ -1,4 +1,4 @@
-#### 💡About These Notes:  These are my personal security engineering study notes, structured and refined with AI assistance. Feel free to use them as a comprehensive reference guide to master SQL Injection (SQLi)!
+#### 💡About These Notes:  These are my personal security engineering study notes, structured and refined with AI assistance. Feel free to use them as a comprehensive reference guide to master Cross-Site Scripting (XSS)!
 ### ⚡ Attack Style: Cross-Site Scripting (XSS) Fundamentals
 
 **The Goal:** Force a vulnerable web application to execute arbitrary JavaScript inside a victim's browser, bypassing the Same Origin Policy to hijack user sessions, steal data, or seize total administrative control.
