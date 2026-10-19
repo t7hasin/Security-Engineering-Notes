@@ -358,3 +358,355 @@ document.write('... <script>alert(document.domain)</script> ...');
 * **Close Before You Explode:** You have to manually "break out" of whatever container your input lands in before your JavaScript can run.
 * **The Fix:** Use closing characters (like quotation marks `"`, closing brackets `>`, or closing tags like `</script>`) to shut down the existing HTML element *first*, and *then* launch your script.
 * **The Mental Model:** Imagine trying to drop a message inside a locked box. If you don't pick the lock (close the container) first, your message just gets stuck inside the walls where nobody can read it!
+
+### 🖼️ Attack Style: The `innerHTML` Sink (Bypassing Modern Browser Defense)
+
+**The Goal:** Force a page to execute JavaScript via `innerHTML` by using HTML elements with event handlers (like `<img>` or `<iframe>`) instead of blocked `<script>` tags.
+
+---
+
+#### 🧩 Concept: The `innerHTML` Security Gate
+
+* **The Blockade:** Modern web browsers explicitly block `<script>` tags from executing when injected into `innerHTML`. Furthermore, inline events like `<svg onload=...>` won't fire either.
+* **The Bypass:** While `<script>` tags are disabled, browsers *do* still render injected HTML elements like images and frames. By pairing these allowed elements with **event handlers** (like `onerror` or `onload`), you force the browser to execute JavaScript when the element fails or finishes loading.
+
+---
+
+#### 🛠️ The Implementation & Payload
+
+* **Vulnerable Code:**
+```javascript
+element.innerHTML = '... ' + untrustedInput + ' ...';
+
+```
+
+
+* **The Payload (Image Error Trick):**
+```html
+<img src=1 onerror=alert(document.domain)>
+
+```
+
+
+
+---
+
+#### 🎯 Why It Works
+
+1. The browser sees the injected `<img>` tag and attempts to load an image from `src=1`.
+2. Since `1` is an invalid image source, the load immediately fails.
+3. The browser instantly triggers the `onerror` event handler, running your injected `alert(document.domain)` payload right inside the victim's session!
+
+Some terms which you might not understand is simply given below:
+
+---
+
+### 🧱 Building Blocks: Elements vs. Attributes
+
+#### 1. What is an HTML Element?
+
+* **Simply put:** A complete building block on a webpage (like a button, paragraph, image, or box).
+* **How it looks:** It usually starts with an opening tag `<tag>`, holds some content inside, and ends with a closing tag `</tag>`.
+* **Example:** `<p>Hello world!</p>` is a text paragraph element.
+
+#### 2. What is an HTML Attribute?
+
+* **Simply put:** A setting or extra detail attached inside an element's opening tag to control how it behaves or where it gets data.
+* **How it looks:** Written inside the opening tag as `name="value"`.
+* **Example:** In `<a href="[https://google.com](https://google.com)">Click Me</a>`, `href="..."` is the **attribute** telling the link element where to send you when clicked.
+
+---
+
+### 🏷️ The Specific Tags & Sinks
+
+#### 3. What is `<script>`?
+
+* **Simply put:** The "code box" tag used to hold or load executable JavaScript code.
+* **Role in Security:** Browsers normally run any code inside a `<script>` tag immediately when loading a page.
+
+#### 4. What is `<img>`?
+
+* **Simply put:** The HTML element used to display an image on a webpage.
+* **How it works:** It uses the `src="image_link"` attribute to tell the browser where to fetch the picture.
+* **Role in Security:** If the `src` link breaks (e.g., `src=x`), the browser triggers its `onerror="..."` attribute, allowing attackers to sneak JavaScript inside that error handler.
+
+#### 5. What is `<iframe>`?
+
+* **Simply put:** An "Inline Frame"—essentially a mini-browser window embedded inside a webpage that displays a completely separate website or HTML page inside it.
+* **Example:** Embedding a YouTube video or Google Map on a blog post uses an `<iframe>`.
+
+#### 6. What is `innerHTML`?
+
+* **Simply put:** A JavaScript property that lets code read or replace the raw HTML content inside an element.
+* **How it works:** If JavaScript runs `document.getElementById('box').innerHTML = '<b>Hi</b>'`, it replaces whatever was inside that box with bold text.
+* **Role in Security:** It is a high-risk **Sink**. If untrusted user text is given directly to `innerHTML`, the browser turns that text into live HTML elements.
+
+### 🧭 1. What is `location.search`?
+
+* **Simply put:** It is a piece of JavaScript that grabs everything in the URL starting from the **question mark (`?`)** onward.
+* **Example:** If the URL is `[https://example.com/shop?item=shoes&color=red](https://example.com/shop?item=shoes&color=red)`, then `location.search` is:
+`?item=shoes&color=red`
+* **Why hackers care:** It is the #1 **Source** for DOM-based XSS. Attackers use it to inject malicious text directly into a link, knowing the website's JavaScript will read that part of the URL and process it.
+
+---
+
+### ⚡ 2. What is an Event Handler?
+
+* **Simply put:** A built-in trigger attribute attached to an HTML element that waits for a specific action to happen (like clicking, loading, or failing), and then instantly runs JavaScript code.
+* **Common Examples:**
+* `onclick`: Runs code when the user clicks an element.
+* `onload`: Runs code when an element finishes loading.
+* `onerror`: Runs code when an element **fails** to load (e.g., a broken image).
+
+
+* **Why hackers care:** When modern websites block standard `<script>` tags, hackers use event handlers (like `onerror` inside a broken `<img>` tag) as a secret backdoor to force the browser to run their JavaScript anyway.
+
+### 📦 Attack Style: Third-Party Libraries & jQuery (The Plugin Trap)
+
+**The Goal:** Find insecure functions in third-party libraries (like jQuery) that take untrusted URL data and turn normal page elements into clickable JavaScript execution links.
+
+---
+
+#### 🧩 Concept: Plugin Sinks
+
+* **The Hidden Danger:** Modern websites don't just use raw JavaScript; they rely heavily on third-party libraries like jQuery. These libraries come with their own built-in functions that can act as dangerous **Sinks**.
+* **The jQuery `attr()` Flaw:** The jQuery `.attr()` function is used to change element attributes (like links or image sources). If a developer uses it to stuff raw URL data into an element attribute, you can hijack it.
+
+---
+
+#### 🛠️ The Implementation & Vulnerable Code
+
+* **Vulnerable Code Example:**
+```javascript
+$(function() {
+    $('#backLink').attr("href", (new URLSearchParams(window.location.search)).get('returnUrl'));
+});
+
+```
+
+
+*What this code does:* It looks at the URL, grabs whatever text is in the `returnUrl` parameter, and injects it straight into the `href` attribute of a "Back" link.
+
+---
+
+#### 🎯 The Payload & Why It Works
+
+* **The URL Payload:**
+```text
+?returnUrl=javascript:alert(document.domain)
+
+```
+
+
+* **Why It Works:**
+1. The website reads your malicious `returnUrl` from the URL bar.
+2. jQuery's `.attr()` function blindly sets the back link's destination to `javascript:alert(document.domain)`.
+3. The moment the user clicks that "Back" link on the page, instead of navigating to a safe page, the browser executes your embedded JavaScript!
+
+Some terms and codes simpler meaning given below which helped me alot before:
+
+---
+
+### 📚 1. What does a "Library" simply mean?
+
+* **Simply put:** A library is a **bundle of pre-written code** created by someone else that developers download and plug into their own websites.
+* **The Analogy:** Instead of building a table completely from scratch by cutting down trees and shaping wood, a developer goes to a store and buys a pre-made table leg or kit. Libraries save developers time so they don't have to reinvent the wheel.
+
+---
+
+### ⚡ 2. What is jQuery simply?
+
+* **Simply put:** jQuery is just a **very famous and popular JavaScript library**.
+* **Why it exists:** Regular JavaScript can sometimes be long and annoying to write. jQuery was invented to make JavaScript short, fast, and easy. Because it was used on millions of websites for over a decade, security researchers look closely at how developers use its special functions.
+
+---
+
+### 🔍 3. How do I know if a developer is stuffing raw URL data into an attribute?
+
+* **Simply put:** You look at how the website behaves and inspect its JavaScript code.
+* **The Clues to look for:**
+1. Look at the links on the page (like a "Back" button, a "Next" page link, or a banner).
+2. Change something in your URL bar (like adding `?returnUrl=test` at the end) and see if that text instantly appears inside the link's destination (`href`) when you inspect the element.
+3. If you look at the website's JavaScript files (using `Ctrl+Shift+F` in DevTools) and see functions like `.attr("href", ...)` pulling data directly from the URL, you've found the dangerous pipeline!
+
+
+
+---
+
+### 🧩 4. Breaking down that JavaScript code piece by piece
+
+Let's look at this code line:
+
+```javascript
+$(function() {
+    $('#backLink').attr("href", (new URLSearchParams(window.location.search)).get('returnUrl'));
+});
+
+```
+
+Here is what every single part is saying in plain English:
+
+1. **`$(function() { ... })`**
+* *"Hey browser, wait until the webpage finishes loading, and then run this little script right away."*
+
+
+2. **`window.location.search`**
+* *"Look up at the URL bar in the browser, and grab everything written after the question mark (`?`)."*
+
+
+3. **`new URLSearchParams(...).get('returnUrl')`**
+* *"Scan through that URL data, find the word `returnUrl`, and grab whatever value is attached to it."*
+* *(For example, if your URL is `[site.com/page?returnUrl=google.com](https://site.com/page?returnUrl=google.com)`, this part extracts just `google.com`).*
+
+
+4. **`$('#backLink').attr("href", ...)`**
+* *"Find the HTML element on the page that has the ID `backLink` (which is usually a 'Back' button or link), and change its `href` setting (where it sends you when clicked) to whatever value we just grabbed from the URL."*
+
+
+
+**The Security Flaw in One Sentence:** Because the code blindly takes whatever someone types into `returnUrl=` in the URL bar and pastes it straight into the "Back" button's destination, an attacker can type `javascript:alert(1)` instead of a normal link, turning a normal button into a weapon!
+
+### ⚙️ Attack Style: The jQuery `$()` Selector Sink (The Auto-Scroll Trap)
+
+**The Goal:** Exploit older versions of jQuery (or vulnerable custom code) where passing user-controlled data into the `$()` selector function turns normal UI features—like auto-scrolling—into an instant code execution trap.
+
+---
+
+#### 🧩 Concept: The Selector Trap
+
+* **What is the `$()` Selector?** In jQuery, the dollar sign function is used to find or create HTML elements on a page (for example, `$('#myButton')` finds an element with that ID).
+* **The Classic Flaw:** In older days, developers used this selector alongside `location.hash` (the part of the URL after the `#` symbol) to automatically scroll down to a specific comment or section when a page loaded.
+* **The Danger:** If you passed HTML into that selector instead of just an ID name, jQuery would accidentally build that HTML right into the live webpage! (Though modern jQuery patches blocked this if the input starts with a `#`, unpatched or custom code in the wild is still vulnerable).
+
+---
+
+#### 🛠️ The Vulnerable Code & The Exploit
+
+* **Vulnerable Code Example:**
+```javascript
+$(window).on('hashchange', function() {
+    var element = $(location.hash);
+    element[0].scrollIntoView();
+});
+
+```
+
+
+*What this code does:* Whenever the URL hash changes (like when clicking an anchor link or scrolling), it takes whatever is in the hash, passes it into jQuery's `$()` selector, and scrolls the browser window to that element.
+* **The iframe Exploit (Triggering it Without User Clicks):**
+To force the browser to fire this vulnerability automatically without waiting for someone to click around, hackers use a clever `<iframe>` trick:
+```html
+<iframe src="https://vulnerable-website.com#" onload="this.src+='<img src=1 onerror=alert(1)>'">
+
+```
+
+
+* **How the iframe trick works:** The iframe loads the target page. The moment it finishes loading (`onload`), it instantly slams our XSS payload (`<img src=1 onerror=alert(1)>`) onto the end of the URL hash. This instantly forces a `hashchange` event, bypassing the need for manual interaction and executing the alert box!
+
+
+
+---
+
+#### 🎯 Plain-English Breakdown of the Code
+
+1. **`$(window).on('hashchange', ...)`** -> *"Hey website, keep an eye on the URL hash (the part after `#`). If it changes, run this code."*
+2. **`var element = $(location.hash);`** -> *"Take whatever is written inside that hash, shove it into jQuery's selector, and treat it like an HTML element."*
+3. **`element[0].scrollIntoView();`** -> *"Scroll the webpage down so that this element is front and center on the screen."*
+* *The Hack:* Because jQuery tries to build whatever you typed into real HTML, typing a broken image tag with an `onerror` handler forces the browser to run your script instead of just scrolling!
+
+### 🪞 Attack Style: Reflected DOM XSS (The Server-Client Tag Team)
+
+**The Goal:** Exploit hybrid vulnerabilities where the server first echoes your input into the HTML response (reflection), and the browser's local JavaScript then picks it up and feeds it into a dangerous sink.
+
+---
+
+#### 🧩 Concept: When Server Reflection Meets Client Sinks
+
+* **Pure DOM XSS vs. Hybrid:** Pure DOM XSS happens entirely inside the browser without the server ever seeing or touching the payload. But in **Reflected DOM XSS**, the server gets involved first.
+* **The Trap Sequence:**
+1. You send data to the server (e.g., via a URL parameter).
+2. The server echoes that data right back into the HTML response—often hiding it inside a JavaScript variable or a form field.
+3. The page's own JavaScript reads that server-reflected data and unsafely passes it to a danger zone (like `eval()`).
+
+
+
+---
+
+#### 🛠️ The Vulnerable Code & Execution
+
+* **Vulnerable Code Example:**
+```javascript
+// The server injects your input directly into a JavaScript string literal:
+eval('var data = "reflected string";');
+
+```
+
+
+*What this code does:* The page takes whatever text the server reflected, wraps it in quotation marks inside an `eval()` statement, and executes it.
+* **The Payload / Breakout:**
+If you control the "reflected string" portion, you don't just type text; you use quotes and semicolons to **escape** the variable assignment and append your own command:
+```text
+"; alert(document.domain); //
+
+```
+
+
+When the server reflects this, the resulting line of code becomes:
+```javascript
+eval('var data = ""; alert(document.domain); //";');
+
+```
+
+
+*Boom!* You closed the string, injected your own code, and commented out the rest of the line.
+
+---
+
+#### 🎯 Plain-English Summary
+
+Think of Reflected DOM XSS as a relay race:
+
+1. **The Server** is the first runner—it takes your input from the request and hands it off by printing it onto the webpage.
+2. **The Client-Side Script** is the second runner—it picks up that printed data and blindly throws it into a danger zone like `eval()`, finishing the race and executing your attack.
+
+### 💾 Attack Style: Stored DOM XSS (The Database-to-Browser Pipe)
+
+**The Goal:** Exploit hybrid vulnerabilities where you plant data into a server's database first, and the browser's own local JavaScript later reads that stored data and feeds it unsafely into a danger zone.
+
+---
+
+#### 🧩 Concept: When Database Storage Meets Client Sinks
+
+* **The Hybrid Threat:** In standard Stored XSS, the server outputs raw script tags directly. But in **Stored DOM XSS**, the server stores your input (like a profile name or comment), and a local client-side script later reads that stored data and passes it into a dangerous sink (like `innerHTML`).
+* **The Trap Sequence:**
+1. You send data to the server (e.g., registering an account with a malicious username).
+2. The server saves it safely in the database.
+3. Later, another user loads the page. The page's own JavaScript fetches that stored username from the server response and blindly drops it into an HTML sink.
+
+
+
+---
+
+#### 🛠️ The Vulnerable Code & Execution
+
+* **Vulnerable Code Example:**
+```javascript
+// The local script takes stored database data and drops it into an element:
+element.innerHTML = comment.author;
+
+```
+
+
+*What this code does:* The browser fetches a stored comment author name from the server and injects it directly into the webpage's live HTML using `innerHTML`.
+* **The Exploit / Flow:**
+If you signed up with a payload instead of a normal name (such as `<img src=1 onerror=alert(document.domain)>`), the database saves it. The moment another user views your comment, the local script executes `element.innerHTML = "<img src=1 onerror=alert(document.domain)>"`, turning your stored name into a live exploit!
+
+---
+
+#### 🎯 Plain-English Summary
+
+Think of Stored DOM XSS as a delayed-action trap:
+
+1. **The Plant:** You sneak a malicious payload into a server-stored field (like a username, bio, or comment).
+2. **The Delivery:** The server hands that stored text down to a victim later.
+3. **The Trigger:** The victim's browser runs its own local JavaScript, picks up your stored text, and blindly pushes it into a danger zone like `innerHTML`—firing the attack automatically!
