@@ -275,3 +275,86 @@ Testing for Stored XSS is challenging because data can enter through one door an
 
 * **Step 4: Test the Context & Payload**
 * Once you find a confirmed link between an entry and exit point, analyze the HTML/JavaScript context of the exit point. Test your candidate XSS payloads to break the container and force execution—just like you would with reflected XSS!
+
+### 🧬 Attack Style: DOM-Based Cross-Site Scripting (The Client-Side Trick)
+
+**The Goal:** Trick a website's own background JavaScript into taking messy data (like a link you clicked) and accidentally running it as code.
+
+---
+
+#### 🧩 Concept: The Source, The Sink, and The Pipe
+
+* **The Source (Where trouble starts):** Any spot where an attacker can slip data into the browser. Most of the time, this is just the **URL** (like the stuff after the `?` mark).
+* **The Sink (The danger zone):** A special JavaScript command or HTML updater (like `eval()` or `innerHTML`) that takes text and treats it like real website code.
+* **The Pipe (How it flows):** Unlike other attacks where the server gets tricked, **the server never even sees this happening**. The website's own JavaScript running inside your browser takes the bad data from the URL and feeds it straight into the danger zone.
+
+---
+
+#### 🔍 1. How to Test HTML Danger Zones (Visible Inspection)
+
+When the website dumps your URL data straight onto the webpage:
+
+1. **Drop a Test Word:** Put a random word (like `hello123`) into the URL search bar.
+2. **Search the Live Page (Not "View Source"):** Open your browser's Developer Tools (`Ctrl+F` or `Cmd+F`) and search for your test word in the **Elements/DOM tab**.
+* *Why?* Never right-click and select "View Source"! That only shows the original code sent by the server. You need to see what the live JavaScript is currently doing to the page.
+
+
+3. **Break Out:** See how your word is wrapped. If it's trapped inside quotation marks, try typing a matching quote to break out of the container and slip your script in.
+* *Watch Out:* Modern browsers (like Chrome, Firefox, and Safari) automatically scramble/encode URL symbols, which usually stops these attacks from working easily.
+
+
+
+---
+
+#### 🕵️‍♂️ 2. How to Test JavaScript Danger Zones (The Invisible Flow)
+
+Testing commands like `eval()` is trickier because your test word **won't show up on the screen**, meaning you can't just search for it visually.
+
+1. **Search the Code:** Use Developer Tools (`Ctrl+Shift+F` or `Cmd+Option+F`) to scan all the website's JavaScript files for mentions of the URL or input sources.
+2. **Use Breakpoints (The Pause Button):** Find where the script reads the URL, and set a "breakpoint" to freeze the code in place while it runs.
+3. **Trace the Path:** Step through the code line by line to see where the data travels. Hover your mouse over the variables right before they hit the danger zone to see what they contain, then figure out how to reshape your input to take over!
+
+### 🌊 Attack Style: Sinks & Sources in DOM XSS (The Pipeline)
+
+**The Goal:** Understand how different data pathways (Sources) and destination commands (Sinks) change your hacking strategy, especially when using powerful sinks like `document.write`.
+
+---
+
+#### 🧩 Concept: The Plumbing of DOM XSS
+
+* **The Path Matters:** A website is vulnerable as long as there is an unbroken pipe connecting a **Source** (where you inject data) to a **Sink** (where the data is executed or rendered).
+* **Defensive Roadblocks:** Depending on which sink the app uses, or if the developers tried to filter your data along the way, you will need to tweak your payloads to get code execution.
+
+---
+
+#### 🛠️ The `document.write` Sink: The HTML Injector
+
+* **How it works:** The `document.write` sink writes raw data directly into the webpage's document stream while the page is loading.
+* **Why it's special:** Unlike some sinks that block script tags, `document.write` happily accepts and executes newly injected `<script>` elements.
+* **The Payload:** Because it handles script tags natively, you can use a classic, straightforward payload:
+```javascript
+document.write('... <script>alert(document.domain)</script> ...');
+
+```
+
+
+* **The Catch:** If your input lands inside a quoted string or an existing HTML attribute inside that `document.write` statement, you will first need to break out of those quotes and tags before your `<script>` tag can run!
+
+### 🧱 Attack Style: Breaking Out of Context in `document.write` (The Container Trap)
+
+**The Goal:** Master how to escape surrounding HTML tags and quotes so your payload doesn't get trapped inside dead HTML.
+
+---
+
+#### 🧩 Concept: The Locked Box Problem
+
+* **The Trap:** `document.write` rarely drops your input into an empty space. Usually, it wraps your text inside existing HTML code (like a search box, a paragraph tag, or quotation marks).
+* **The Result:** If you just inject `<script>alert(1)</script>` blindly, the browser might treat it as normal text or shove it inside an attribute, rendering it harmless.
+
+---
+
+#### 🛠️ How to Escape the Container
+
+* **Close Before You Explode:** You have to manually "break out" of whatever container your input lands in before your JavaScript can run.
+* **The Fix:** Use closing characters (like quotation marks `"`, closing brackets `>`, or closing tags like `</script>`) to shut down the existing HTML element *first*, and *then* launch your script.
+* **The Mental Model:** Imagine trying to drop a message inside a locked box. If you don't pick the lock (close the container) first, your message just gets stuck inside the walls where nobody can read it!
