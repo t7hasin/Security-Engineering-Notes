@@ -817,3 +817,336 @@ If the website blocks angle brackets `< >`, you can't use script tags. Instead, 
 2. **`autofocus`** -> *"Tell the browser to instantly focus on this HTML element the moment the page loads (so the user doesn't even have to click anything!)."*
 3. **`onfocus=alert(document.domain)`** -> *"The exact second the element gains focus, trigger this JavaScript alert code."*
 4. **`x="`** -> *"Glue a fake attribute named `x` onto the end and open a dangling quote, just so the website's remaining HTML code doesn't break and crash the page."*
+
+### 🔗 Attack Style: Sinking into Native Scriptable Attributes (The `href` Shortcut)
+
+**The Goal:** Take advantage of special HTML attributes that are already designed to handle actions or links, allowing you to execute JavaScript directly without needing to break out of any quotation marks.
+
+---
+
+#### 🧩 Concept: The Built-In Code Pathway
+
+* **The Special Attributes:** Not all HTML attributes are just plain text. Attributes like `href` (on anchor links) or `src` (on frames/scripts) are built by browsers to handle navigation and protocols.
+* **The `javascript:` Shortcut:** Because these attributes expect a link or destination, you can completely skip trying to break out of quotes. Instead of typing a normal website address, you type the word `javascript:` followed by your payload, turning the link itself into a weapon.
+
+---
+
+#### 🛠️ The Payload & Execution
+
+* **The Payload:**
+```html
+<a href="javascript:alert(document.domain)">Click Me</a>
+
+```
+
+
+* **Why You Don't Need Quotes:**
+If your input lands safely inside an attribute that natively supports JavaScript protocols, you don't need to type `">` to close anything. The browser's engine is already waiting for a link action, making your payload instantly valid.
+
+---
+
+#### 🎯 Plain-English Breakdown
+
+Think of this as a backdoor built right into the browser's architecture:
+
+1. **The Destination:** The `href` attribute tells the browser where to go when someone clicks the link.
+2. **The Hijack:** Instead of typing `[https://google.com](https://google.com)`, you feed it `javascript:alert(document.domain)`.
+3. **The Trigger:** The moment the victim clicks the link, the browser reads the `javascript:` prefix, stops trying to load a webpage, and runs your code instead!
+
+Some more clearer explanation of terms:
+
+---
+
+### 🔗 1. What is the `href` attribute simply?
+
+* **Simply put:** `href` stands for **Hypertext Reference**. It is an attribute inside an HTML link that tells the browser **where to go** when the user clicks on it.
+* **Example:** In `<a href="[https://google.com](https://google.com)">Click</a>`, the `href` is `[https://google.com](https://google.com)`.
+
+---
+
+### ⚓ 2. What are anchor links simply?
+
+* **Simply put:** An "anchor link" is just the technical name for a **clickable link** on a webpage.
+* It is created using the `<a>` HTML tag (which stands for "anchor"). It's the classic text, button, or image you click to jump to another page or website.
+
+---
+
+### 💾 3. Where is the "stored" XSS here?
+
+To clarify, an `href` attribute **isn't automatically "stored" XSS** on its own—it can happen in reflected, DOM, or stored scenarios. But if we are talking specifically about **Stored XSS** happening through an `href` link, here is how that scenario plays out:
+
+1. **The Plant (Saving it):** A user goes to their profile settings on a website and types `javascript:alert(1)` into their "Personal Website" or "Portfolio Link" field.
+2. **The Database:** The website takes that input and **saves it in its database**, thinking it's a normal link.
+3. **The Trigger (The Stored Part):** Later on, a completely different user visits that person's public profile page. The website pulls that saved `javascript:alert(1)` link from the database and injects it into an HTML anchor tag:
+```html
+<a href="javascript:alert(1)">Check out my profile!</a>
+
+```
+
+
+4. **The Attack:** The unsuspecting visitor clicks the profile link, and because the `href` contains a `javascript:` command instead of a real web address, the stored exploit instantly fires!
+
+### ⌨️ Attack Style: The `accesskey` Trick (The Keyboard Shortcut Trap)
+
+**The Goal:** Execute JavaScript when angle brackets are blocked and the target tag doesn't fire events automatically, by turning a harmless element into a secret keyboard shortcut that the user triggers for you.
+
+---
+
+#### 🧩 Concept: The Locked Tag Problem
+
+* **The Defense:** The website blocks angle brackets (`<` and `>`), meaning you can't use `<script>` tags. Worse yet, you're stuck inside a passive tag (like a canonical link tag, e.g., `<link rel="canonical" href="...">`) that doesn't load images or fire automatic events on its own.
+* **The Keyboard Shortcut Escape Hatch:** HTML has a built-in feature called **`accesskey`** that lets developers assign keyboard shortcuts to elements. If you can inject an `accesskey` and an event handler (like `onclick`) into that tag, you can trick the user's keyboard into firing your exploit!
+
+---
+
+#### 🛠️ The Payload & How It Works
+
+* **The Injected Attribute Payload:**
+```html
+accesskey="x" onclick="alert(document.domain)"
+
+```
+
+
+*(Note: Depending on the browser and operating system, pressing a specific key combo like Alt + Shift + X will focus or activate that element).*
+* **Why You Need User Interaction:**
+Because tags like `<link>` or hidden inputs won't trigger automatically, you (or a social engineering trick) have to get the victim to press the specific shortcut key combination on their keyboard while they are on the page. The moment they do, the browser treats it as a click/activation, and your `onclick` code runs instantly!
+
+---
+
+#### 🎯 Plain-English Summary
+
+Think of this as planting a landmine that requires a secret code:
+
+1. **The Plant:** You inject an `accesskey` attribute into a tag where angle brackets are banned.
+2. **The Setup:** You assign a letter (like `x`) and tie it to an `onclick` JavaScript alert.
+3. **The Trigger:** Since the tag won't activate on its own, you prompt or instruct the victim to press the key combination. The browser fires the shortcut, and your payload executes right inside their session!
+
+### 🕵️‍♂️ Recon Guide: How to Spot and Test for `accesskey` Vulnerabilities
+
+**The Goal:** Discover if a website reflects your input into HTML attributes, and determine if you can inject or abuse the `accesskey` attribute to trigger an attack.
+
+---
+
+#### 🧩 Concept: The Reflection Hunt
+
+* **What you are looking for:** You aren't usually looking to see if the website *already* uses `accesskey` by default (though you can search for the word `accesskey` in the source code). Instead, you want to see if the website **reflects your typed input inside an attribute tag** where you can inject your own code.
+* **The Golden Rule:** If your input gets echoed inside an HTML tag attribute, you test what characters are allowed (are quotes allowed? are angle brackets blocked?). If angle brackets `< >` are blocked but quotes are allowed, `accesskey` becomes your primary weapon.
+
+---
+
+#### 🛠️ Step-by-Step: How to Test for It
+
+1. **Step 1: Send a Unique Probe**
+* Go to a search bar, a profile field, or a URL parameter (like `?search=`).
+* Type a unique test string, such as `hacktest123`.
+
+
+2. **Step 2: Inspect the Page Source**
+* Right-click the page and select **View Page Source** (or press `Ctrl+U`), or use **Inspect Element** (`Ctrl+Shift+C`).
+* Press `Ctrl+F` and search for your test string (`hacktest123`).
+
+
+3. **Step 3: Analyze Your Location (The Context)**
+* Look closely at *where* your `hacktest123` landed:
+* *Is it trapped between normal text tags?* (You can use `<script>` tags).
+* *Is it sitting inside an attribute?* (Like `<input value="hacktest123">` or `<link rel="canonical" href="hacktest123">`).
+
+
+
+
+4. **Step 4: Test the Injection**
+* If it's trapped inside an attribute and angle brackets are blocked, try injecting quotes and an access key to see if the server accepts it:
+```text
+" accesskey="X" onclick="alert(1)
+
+```
+
+
+* Reload the page, inspect the element again, and see if your `accesskey="X"` successfully embedded itself into the HTML structure without being stripped or safely encoded by the server!
+
+### ✂️ Attack Style: Script Tag Breakout (Killing the Script Block)
+
+**The Goal:** Break out of an existing JavaScript `<script>` block by prematurely closing it with a closing tag, allowing you to escape the JavaScript environment and inject fresh HTML that executes your code.
+
+---
+
+#### 🧩 Concept: HTML Parsing Beats JavaScript Parsing
+
+* **The Context:** Your input lands inside an existing JavaScript variable or string block (e.g., inside `<script> var input = '...' </script>`).
+* **The Browser's Secret Rule:** Browsers parse **HTML first** and **JavaScript second**.
+* **The Exploit Logic:** When the browser scans the raw HTML, it is aggressively looking for closing tags. The moment it sees `</script>`, it immediately shuts down the script block—completely ignoring whether the JavaScript code inside was finished or left with broken, unclosed quotation marks! Once the script block is killed, you are back in normal HTML territory where you can run whatever tags you want.
+
+---
+
+#### 🛠️ The Payload & Execution
+
+* **Vulnerable Setup:**
+```html
+<script>
+var input = 'controllable data here';
+</script>
+
+```
+
+
+* **The Payload:**
+```html
+</script><img src=1 onerror=alert(document.domain)>
+
+```
+
+
+* **Resulting HTML Code:**
+```html
+<script>
+var input = '</script><img src=1 onerror=alert(document.domain)>';
+</script>
+
+```
+
+
+
+---
+
+#### 🎯 Plain-English Breakdown of How It Works
+
+1. **`</script>`** -> *"Hey browser, stop reading JavaScript right now; this script block is officially closed!"* (Even though it leaves the original variable string open and technically broken).
+2. **`<img src=1 onerror=alert(document.domain)>`** -> *"Now that we are out of the script block and back in open HTML land, render this broken image tag."*
+3. **Why it succeeds:** The browser doesn't care that the previous JavaScript code was left messy or broken. It closed the script tag precisely when you told it to, and then immediately parsed and executed your new image error handler!
+
+### ⛓️ Attack Style: Breaking Out of a JavaScript String (The Quote Escape)
+
+**The Goal:** Escape a quoted string literal inside an active JavaScript block without triggering syntax errors, allowing you to execute JavaScript commands directly.
+
+---
+
+#### 🧩 Concept: Trapped Inside Quotes (And Why Syntax Matters)
+
+* **The Context:** Your input lands safely inside a string variable in an existing script, like this:
+```javascript
+var greeting = 'Hello, [YOUR_INPUT_HERE]!';
+
+```
+
+
+* **The Problem:** Because you are trapped inside single quotes (`'`), typing `alert(1)` won't work—the browser just thinks you are typing a literal string of text, not code. If you try to close the quote prematurely, you'll leave the rest of the script hanging.
+* **The Golden Rule of JS Execution:** JavaScript is strict. If your payload creates a syntax error (like unclosed brackets or dangling quotes), the browser's JavaScript engine crashes, cancels the script, and **nothing executes**. You must mathematically or syntactically **repair** the script after your payload.
+
+---
+
+#### 🛠️ The Payloads & How They Work
+
+* **Option 1: The String Concatenation Trick**
+* **The Payload:**
+```text
+'-alert(document.domain)-'
+
+```
+
+
+* **How it works:**
+1. The first single quote (`'`) closes the website's original string.
+2. The hyphen (`-`) tells JavaScript to subtract (or concatenate) your function.
+3. Your code `alert(document.domain)` runs.
+4. The trailing hyphen and quote (`-'`) cleanly reconnect your payload to the rest of the website's leftover string, preventing any syntax errors!
+
+
+* *Resulting code:* `var greeting = 'Hello, '-'alert(document.domain)-''!';`
+
+
+
+
+* **Option 2: The Statement Terminator & Comment Trick**
+* **The Payload:**
+```text
+';alert(document.domain)//
+
+```
+
+
+* **How it works:**
+1. The single quote (`'`) closes the website's string.
+2. The semicolon (`;`) officially ends that line of JavaScript code.
+3. Your code `alert(document.domain)` runs as a brand-new, separate command.
+4. The double slash (`//`) turns the rest of the website's original code (including the leftover closing quote) into a **comment**, making the browser completely ignore it!
+
+
+* *Resulting code:* `var greeting = 'Hello, ';alert(document.domain)//';`
+
+
+
+
+
+---
+
+#### 🎯 Plain-English Summary
+
+Think of this like performing surgery inside a locked box:
+
+1. **The Breakout:** You use a quote (`'`) to pop out of the string boundary.
+2. **The Execution:** You run your code (`alert`).
+3. **The Cleanup:** You use a math operator (`-`) or a comment (`//`) to stitch the broken code back together so the browser doesn't notice the hack and throw a crash error!
+
+### 🔄 Attack Style: Backslash Neutralization (The Escape-Char Bypass)
+
+**The Goal:** Defeat backend defense mechanisms that try to neutralize your quotes with a backslash (`\'`), by slipping in your own backslash to cancel theirs out and force a string breakout.
+
+---
+
+#### 🧩 Concept: The Escaped Quote Flaw
+
+* **The Defense:** To prevent XSS, smart applications try to protect string variables by automatically inserting a backslash (`\`) before any single quote you type. This turns `'` into `\'`, telling the JavaScript parser, *"Treat this quote literally, do not close the string."*
+* **The Blind Spot:** The application's sanitizer makes a classic rookie mistake: **it fails to escape the backslash itself**.
+* **The Counter-Move:** Because the app doesn't sanitize your backslashes, you can type your own backslash right before your quote. When the app adds its own backslash in front of yours, it creates a double-backslash combo (`\\`), which completely neutralizes its own defense!
+
+---
+
+#### 🛠️ The Payload & How It Works
+
+* **Your Input:**
+```text
+\';alert(document.domain)//
+
+```
+
+
+* **What the Application Turns It Into:**
+```text
+\\';alert(document.domain)//
+
+```
+
+
+* **Why It Works:**
+When the JavaScript engine reads `\\'`, the first backslash cancels out the second one (making it a literal, harmless backslash). Because the second backslash is neutralized, **the single quote is left completely naked and exposed**, allowing it to act as a normal string terminator again!
+
+---
+
+#### 🎯 Plain-English Breakdown of the Trick
+
+Think of this as a game of math and cancellation:
+
+1. **You provide:** A backslash and a quote (`\'`).
+2. **The app adds:** Its own safety backslash in front of yours, resulting in two backslashes and a quote (`\\`).
+3. **The browser reads it:** *"Ah, two backslashes mean a literal slash, which leaves the quote unshielded."*
+4. **The Breakout:** The quote successfully closes the string, the semicolon ends the statement, and your `alert()` payload fires!
+
+What does backslash (\) simply really do?
+In programming, the backslash (`\`) is known as the **"Escape Character."**
+
+### 🛡️ What it simply does:
+
+It acts like a **shield**. When you place a backslash right before a special symbol, it tells the computer:
+
+> *"Stop treating this symbol as code or a command. Just treat it as normal, boring text."*
+
+---
+
+### 💡 An Everyday Example
+
+Normally, in JavaScript, a single quote (`'`) is a **command** that means: *"End of the text string!"*
+
+* If you write a sentence like `'It's sunny'`, the computer gets confused because the middle quote (`'`) looks like an accidental end of the string.
+* To fix this, developers use a backslash as a shield: `'It\'s sunny'`.
+* When the computer reads `\'`, it says: *"Ah, that backslash means I should ignore the special rule for this quote. It's just a normal punctuation mark, not the end of the string."*
