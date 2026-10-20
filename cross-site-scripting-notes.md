@@ -710,3 +710,110 @@ Think of Stored DOM XSS as a delayed-action trap:
 1. **The Plant:** You sneak a malicious payload into a server-stored field (like a username, bio, or comment).
 2. **The Delivery:** The server hands that stored text down to a victim later.
 3. **The Trigger:** The victim's browser runs its own local JavaScript, picks up your stored text, and blindly pushes it into a danger zone like `innerHTML`—firing the attack automatically!
+
+### 🎯 Attack Style: XSS Contexts & HTML Tag Injection (The Open Field)
+
+**The Goal:** Analyze the exact spot where your input lands on a webpage (the "context") and choose the right payload to execute code when your text falls right out in the open between HTML tags.
+
+---
+
+#### 🧩 Concept: What is an XSS Context?
+
+* **The Context:** The precise location within the page's HTML response where your attacker-controlled data finally appears.
+* **The Detective Work:** Before throwing random payloads at a website, you must figure out:
+1. Where exactly is my input showing up? (Between tags? Inside quotes? Inside a script block?)
+2. Is the website filtering, encoding, or chopping up my text?
+
+
+* **The Strategy:** Once you know the exact context, you can pick a candidate payload specifically designed to break through that exact barrier.
+
+---
+
+#### 🛠️ The Scenario: XSS Between HTML Tags
+
+* **The Setup:** Sometimes, your input lands directly into plain text space—right *between* existing HTML tags, like this:
+```html
+<p>Welcome back, [YOUR_INPUT_HERE]!</p>
+
+```
+
+
+* **Why It's Easy:** Because you aren't trapped inside quotation marks or attributes, you don't even need to "break out" of anything. You can just introduce completely **brand new HTML tags** that the browser will instantly render and execute!
+
+---
+
+#### 🎯 The Payloads for Open HTML Spaces
+
+When your text lands safely between open tags, you can use direct execution payloads:
+
+1. **The Classic Script Tag:**
+```html
+<script>alert(document.domain)</script>
+
+```
+
+
+* *What it does:* Tells the browser, "Stop reading normal text, execute this JavaScript block immediately."
+
+
+2. **The Broken Image Trick:**
+```html
+<img src=1 onerror=alert(1)>
+
+```
+
+
+* *What it does:* Forces the browser to look for a fake image source (`1`), fail instantly, and run the `onerror` JavaScript command as a backup.
+
+### 🏷️ Attack Style: XSS in HTML Tag Attributes (The Attribute Trap)
+
+**The Goal:** Exploit situations where your input gets swallowed inside an HTML attribute value (like a quote-enclosed form field or link setting), either by breaking completely out of the tag or by smuggling in a secret event handler.
+
+---
+
+#### 🧩 Concept: Trapped Inside the Quotes
+
+* **The Context:** When the website places your input inside an HTML attribute (e.g., `<input type="text" name="username" value="[YOUR_INPUT_HERE]">`).
+* **The Barrier:** Because you are stuck inside quotation marks, regular text or raw tags won't work right away—you have to break out of the container first.
+* **The Two Battle Strategies:**
+1. **The Full Breakout:** If angle brackets (`<` and `>`) are allowed, you close the quote, close the tag entirely, and launch a brand new script tag.
+2. **The Event Handler Smuggle:** If angle brackets are blocked or filtered, you stay inside the tag, close the quote, add your own malicious attribute (like an event handler), and gracefully fix the rest of the code.
+
+
+
+---
+
+#### 🛠️ The Payloads & How They Work
+
+* **Strategy 1: The Full Tag Breakout**
+* **The Payload:**
+```html
+"><script>alert(document.domain)</script>
+
+```
+
+
+* **Why it works:** The initial quote (`"`) closes the website's open attribute, the bracket (`>`) closes the HTML tag itself, and your `<script>` tag runs freely right after it.
+
+
+* **Strategy 2: The Stealth Event Handler (When `< >` are blocked)**
+* **The Payload:**
+```html
+" autofocus onfocus=alert(document.domain) x="
+
+```
+
+
+
+
+
+---
+
+#### 🎯 Plain-English Breakdown of the Stealth Payload (`" autofocus onfocus=... x="`)
+
+If the website blocks angle brackets `< >`, you can't use script tags. Instead, you smuggle your code inside an attribute:
+
+1. **`"`** -> *"Close the quote on the website's existing attribute so we aren't trapped anymore."*
+2. **`autofocus`** -> *"Tell the browser to instantly focus on this HTML element the moment the page loads (so the user doesn't even have to click anything!)."*
+3. **`onfocus=alert(document.domain)`** -> *"The exact second the element gains focus, trigger this JavaScript alert code."*
+4. **`x="`** -> *"Glue a fake attribute named `x` onto the end and open a dangling quote, just so the website's remaining HTML code doesn't break and crash the page."*
