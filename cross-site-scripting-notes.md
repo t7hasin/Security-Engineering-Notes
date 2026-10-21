@@ -1150,3 +1150,378 @@ Normally, in JavaScript, a single quote (`'`) is a **command** that means: *"End
 * If you write a sentence like `'It's sunny'`, the computer gets confused because the middle quote (`'`) looks like an accidental end of the string.
 * To fix this, developers use a backslash as a shield: `'It\'s sunny'`.
 * When the computer reads `\'`, it says: *"Ah, that backslash means I should ignore the special rule for this quote. It's just a normal punctuation mark, not the end of the string."*
+
+### 🚨 Attack Style: Function Calling Without Parentheses (The Exception Bypass)
+
+**The Goal:** Execute a JavaScript function (like `alert`) when strict character filters or a Web Application Firewall (WAF) block critical symbols like parentheses (`(` and `)`).
+
+---
+
+#### 🧩 Concept: Bypassing Parentheses with Error Handling
+
+* **The Filter Problem:** Security systems often block parentheses because they are required to call functions (e.g., `alert(1)`). Without them, standard payloads fail.
+* **The Exception Trick:** JavaScript has built-in error management. If you register a global error handler (`onerror`) and deliberately crash or "throw" an error, the browser will automatically catch it and hand your thrown value over to your function—completely skipping the need for parentheses!
+
+---
+
+#### 🛠️ The Payload & How It Works
+
+* **The Payload:**
+```javascript
+onerror=alert;throw 1
+
+```
+
+
+* **Resulting Action:**
+Instead of writing `alert(1)`, you configure the browser's error system to do the work for you under the hood.
+
+---
+
+#### 🎯 Plain-English Breakdown of the Code
+
+1. **`onerror=alert`** -> *"Hey browser, if any unhandled error ever happens on this page, don't crash silently; instead, pass that error straight into the `alert` function."*
+2. **`;`** -> *"End of statement."*
+3. **`throw 1`** -> *"Deliberately throw an error with the value `1` into the system."*
+4. **Why it succeeds:** The browser catches the thrown `1`, instantly triggers your `onerror` rule, and executes `alert(1)` behind the scenes—bypassing the blocked parentheses entirely!
+
+### 🔣 Attack Style: HTML-Encoding Attribute Bypass (The Trojan Entity Trick)
+
+**The Goal:** Bypass server-side character filters on event handlers (like `onclick`) by hiding forbidden characters inside HTML entities, tricking the sanitizer while letting the browser decode and execute them later.
+
+---
+
+#### 🧩 Concept: The Browser's Order of Operations
+
+* **The Context:** Your input lands inside a JavaScript string that is nested inside an HTML attribute (e.g., `<a href="#" onclick="... var input='YOUR_INPUT'; ...">`).
+* **The Server's Blind Spot:** The server blocks direct single quotes (`'`) to prevent you from breaking out of the string.
+* **The Browser's Secret Timeline:** Browsers don't process everything at once. They parse **HTML first** (converting entities like `&apos;` back into punctuation) and pass code to the **JavaScript engine second**.
+* **The Exploit Logic:** If you submit an HTML-encoded character, the server's security filter looks at it and says, *"That's just a harmless text entity, not a quote!"* But the moment it reaches the browser, the HTML decoder translates it right back into a dangerous quote before JavaScript ever touches it.
+
+---
+
+#### 🛠️ The Payload & How It Works
+
+* **The Payload:**
+```text
+&apos;-alert(document.domain)-&apos;
+
+```
+
+
+* **Resulting Flow:**
+1. **Input Sent:** `&apos;-alert(document.domain)-&apos;`
+2. **HTML Decoding Phase:** The browser reads `&apos;` and turns it into `'`.
+3. **JavaScript Execution Phase:** The script sees `' - alert(...) - '`, breaks out of the string, and fires the alert!
+
+
+
+---
+
+#### 🎯 Plain-English Breakdown of the Trick
+
+Think of this as smuggling contraband past a security checkpoint:
+
+1. **Disguising the Weapon:** Instead of bringing in a real single quote (`'`), you wrap it in a disguise (`&apos;`).
+2. **Fooling the Guard:** The server's security filter checks your input, sees the entity, doesn't recognize it as a threat, and lets it straight through.
+3. **The Unmasking:** Once inside the browser, the HTML parser strips away the disguise and turns `&apos;` back into a live single quote.
+4. **The Breakout:** The quote acts as a string terminator, the math operators stitch the code together cleanly, and your script executes successfully!
+
+### 🕹️ Attack Style: Template Literal Injection (The Backtick Bypass)
+
+**The Goal:** Exploit modern JavaScript template literals by slipping your code directly into a built-in expression wrapper, allowing you to execute commands without even needing to break out of the string.
+
+---
+
+#### 🧩 Concept: The Danger of Dynamic Strings
+
+* **What are Template Literals?** In modern JavaScript, developers use backticks (```) instead of normal quotation marks to create strings. These strings have a powerful built-in feature: any code wrapped inside a `${...}` block will be **automatically evaluated and executed** on the fly.
+* **The Flap in the Armor:** Because template literals are specifically designed to process executable expressions inside them, you don't need to struggle with closing quotes or breaking characters. You just need to speak the string's native language!
+
+---
+
+#### 🛠️ The Payload & How It Works
+
+* **Vulnerable Setup:**
+```javascript
+var input = `controllable data here`;
+
+```
+
+
+* **The Payload:**
+```text
+${alert(document.domain)}
+
+```
+
+
+* **Resulting Code:**
+```javascript
+var input = `${alert(document.domain)}`;
+
+```
+
+
+
+---
+
+#### 🎯 Plain-English Breakdown of the Trick
+
+Think of this as hijacking a feature meant for convenience:
+
+1. **The Native Feature:** The script is built to look inside backtick strings for dynamic variables using the `${...}` syntax.
+2. **The Hijack:** Instead of typing a variable name, you drop your own function call right inside the braces.
+3. **The Execution:** The moment the JavaScript engine reads your input, it pauses to evaluate the expression inside the brackets, running your payload instantly as part of the string's normal processing!
+
+### 🧩 Attack Style: Client-Side Template Injection (The Framework Hijack)
+
+**The Goal:** Exploit applications that use dynamic front-end frameworks (like AngularJS) by injecting malicious template expressions into spots where the framework automatically evaluates code on the fly.
+
+---
+
+#### 🧩 Concept: When Frameworks Become Accomplices
+
+* **The Framework's Job:** Modern web applications use client-side template frameworks (such as AngularJS) to dynamically build and update web pages. These frameworks actively scan the HTML for special syntax—like double curly braces `{{ ... }}`—and execute whatever code they find inside them.
+* **The Flaw:** If a website takes your user input and unsafely drops it into a region managed by one of these frameworks, the framework won't treat your text as boring strings. It will parse it as part of its own application logic and run it!
+
+---
+
+#### 🛠️ The Payload & How It Works
+
+* **The Concept / Proof-of-Concept Expression:**
+```text
+{{7*7}}
+
+```
+
+
+*What this does:* When injected into an AngularJS app, the framework evaluates the math inside the curly braces and replaces it on the screen with `49`, proving the template engine is actively running your input.
+* **The Full XSS Execution:**
+By chaining AngularJS objects and constructors (often bypassing internal framework sandboxes), attackers turn a simple expression into a full code-execution payload:
+```text
+{{$on.constructor('alert(document.domain)')()}}
+
+```
+
+
+
+---
+
+#### 🎯 Plain-English Breakdown of the Trick
+
+Think of this as hijacking an automated assistant living inside the browser:
+
+1. **The Watchful Engine:** The client-side framework is constantly scanning the webpage, looking for special template markers to evaluate.
+2. **The Trojan Expression:** You feed input into the page wrapped in the framework's native syntax (like `{{ ... }}`).
+3. **The Execution:** The framework finds your input, assumes it's safe developer code, evaluates it, and executes your JavaScript automatically—completely bypassing traditional HTML tags!
+
+### 🔓 Attack Style: AngularJS Sandbox Escape & Advanced Bypasses (Breaking the Cage)
+
+**The Goal:** Defeat legacy AngularJS sandbox restrictions to execute arbitrary JavaScript, even when security filters block quotes or standard execution sinks like `$eval` are missing.
+
+---
+
+#### 🧩 Concept: The Illusion of Security (The AngularJS Sandbox)
+
+* **The Sandbox:** Older versions of AngularJS featured an internal security guard designed to block access to dangerous global objects (`window`, `document`) and restricted properties (`__proto__`).
+* **The Flaw:** The sandbox didn't rely on a true security boundary; instead, it used string parsing and function checks (`ensureSafeObject`, `ensureSafeMemberName`) to inspect code *before* running it. Smart researchers found ways to manipulate the framework's own helper functions to trick it into clearing malicious payloads as safe.
+* **The Advanced Hurdles:** If a site blocks quotes entirely, you can't type normal strings to build your payload. And if `$eval` is disabled, you have to use alternative framework filters (like `orderBy`) to force execution!
+
+---
+
+#### 🛠️ The Payloads & How They Work
+
+* **Technique 1: The Basic Sandbox Escape (Fooling `isIdent`)**
+* **The Payload:**
+```text
+'a'.constructor.prototype.charAt=[].join
+
+```
+
+
+* **Why it works:** By overwriting the global `charAt` function with JavaScript's array `join` method, you trick the sandbox's character verification logic (`isIdent`). Instead of checking characters one by one, it reads entire strings as valid identifiers, allowing you to bypass the sandbox rules completely.
+
+
+* **Technique 2: The Quote-Free & `$eval`-Less Execution (`orderBy` Filter)**
+* **The Payload Format:**
+```text
+[123]|orderBy:'YOUR_PAYLOAD_HERE'
+
+```
+
+
+* **Why it works:** The pipe symbol (`|`) in AngularJS triggers a **filter operation** rather than a bitwise math check. Passing an array into the `orderBy` filter forces the framework to evaluate whatever string argument you attach to it—acting as a secret alternative execution engine when `$eval` is blocked or unavailable.
+
+
+
+---
+
+#### 🎯 Plain-English Breakdown of the Trick
+
+Think of this like breaking out of a high-tech prison cell from the inside:
+
+1. **The Disguise (`charAt` hack):** You tamper with the framework's internal counting tools (`charAt`), forcing it to misread your input and falsely declare your malicious code as safe text.
+2. **The Workaround (No Quotes):** If quotes are banned, you use existing string constructors (`[][...].constructor`) to dynamically build letters without typing them directly.
+3. **The Execution Switch (`orderBy`):** If the standard trigger (`$eval`) is locked down, you funnel your payload through the `orderBy` filter. The framework accepts the array, processes your string argument, and executes your JavaScript code live in the browser!
+
+### 🛡️ Attack Style: AngularJS CSP Bypass (Smuggling Code Through Framework Events)
+
+**The Goal:** Defeat strict Content Security Policies (CSP) and AngularJS security guards by exploiting custom framework events and hiding your function calls inside array methods.
+
+---
+
+#### 🧩 Concept: Sneaking Past the Guardrails
+
+* **The Defense:** A strict CSP blocks standard script tags, and the AngularJS sandbox blocks you from directly typing dangerous names like `window.alert`.
+* **The Event Loophole:** AngularJS has its own built-in events (like `ng-focus`). Inside these events, a special helper called `$event.path` tracks where the event came from—and its final stop is always the powerful global `window` object!
+* **The Disguise:** To prevent the sandbox from yelling at you for touching `window`, you feed the path into array tools (like `map()` or `from()`). This triggers your function indirectly, completely bypassing detection.
+
+---
+
+#### 🛠️ The Payloads & How They Work
+
+* **Payload 1: The Path & `from` Trick**
+```html
+<input autofocus ng-focus="$event.path|orderBy:'[].constructor.from([1],alert)'">
+
+```
+
+
+* *Why it works:* It grabs the event's history (`$event.path`), uses the `orderBy` filter to run it, and uses `.from()` to quietly execute `alert` on an array without directly referencing the forbidden `window` object.
+
+
+* **Payload 2: The Short-Form `map` Bypass**
+```text
+[1].map(alert)
+
+```
+
+
+* *Why it works:* Passing `alert` directly into an array's `.map()` function forces JavaScript to run it on every item in the array, executing your code cleanly without setting off sandbox alarms.
+
+
+
+---
+
+#### 🎯 Plain-English Breakdown of the Trick
+
+Think of this like smuggling a message through a trusted delivery network:
+
+1. **The Wake-Up Call (`ng-focus`):** You trigger a custom AngularJS event so the framework's engine starts running.
+2. **Finding the Master Key (`$event.path`):** You grab the event's tracking path, which secretly leads straight to the global `window` object.
+3. **The Hidden Hand-off (`map` / `from`):** Instead of shouting `alert()`, you hand the function over to an array helper (`map` or `from`). The framework thinks it's just doing normal data processing, and your alert pops up safely!
+
+### 🍪 Attack Style: The Cookie Heist (Session Hijacking via XSS)
+
+**The Goal:** Capture a victim's active session cookies through XSS, send them back to a server you control, and clone their login session to impersonate them.
+
+---
+
+#### 🧩 Concept: Stealing the Digital Keycard
+
+* **The Power of Cookies:** Most web apps use session cookies as digital keycards to keep users logged in. If you can read those cookies using JavaScript, you hold the keys to their account.
+* **The Exfiltration Trick:** Once your XSS payload runs, it grabs `document.cookie` and secretly sends it over the network to an endpoint you control (like an attacker-owned listener or log server).
+
+---
+
+#### ⚠️ The Reality Check: Why It Isn't Always Easy
+
+While classic in theory, real-world cookie theft faces major hurdles:
+
+1. **The Guest Problem:** The victim might not even be logged into the application when they hit your payload.
+2. **The `HttpOnly` Shield:** Secure apps protect critical session cookies by marking them with the `HttpOnly` flag, which makes them **completely invisible** to JavaScript (`document.cookie` won't show them).
+3. **IP Locking:** Some apps tie session tokens to a specific IP address; stealing the cookie won't work if your IP doesn't match the victim's.
+4. **Timeouts:** Sessions expire quickly, leaving you a tiny window to hijack the account before it dies.
+
+---
+
+#### 🎯 Plain-English Breakdown of the Attack
+
+Think of this like stealing a hotel room keycard:
+
+1. **The Entry Point:** Your XSS payload executes inside the victim's browser session.
+2. **The Grab:** The script reaches into `document.cookie` to snatch the active session ID.
+3. **The Transmission:** It packs the keycard details into a background request and beams it back to your server.
+4. **The Impersonation:** You take that stolen cookie, paste it into your own browser, and trick the website into thinking *you* are the legitimate user—unless security defenses like `HttpOnly` block the read!
+
+### 🔑 Attack Style: Password Manager Hijack (The Auto-Fill Trap)
+
+**The Goal:** Capture a user's sensitive credentials by tricking their browser's password manager into auto-filling a fake login field injected via XSS, bypassing cookie protections entirely.
+
+---
+
+#### 🧩 Concept: Exploiting Auto-Fill Convenience
+
+* **The Setup:** Modern browsers and password managers love convenience—the moment they see an input field designated for passwords (`<input type="password">`), they eagerly auto-fill saved credentials.
+* **The Trap:** If you use XSS to inject a hidden or disguised password field into the page, the user's password manager might automatically populate it with their real username and password without them even realizing it.
+* **Why It Beats Cookie Theft:** Unlike `HttpOnly` cookies (which are hidden from JavaScript), captured plaintext passwords give you the actual keys to the kingdom. Even better, if the user reuses passwords across websites, you get access to all of their other accounts, too!
+
+---
+
+#### ⚠️ The Reality Check: Limitations & Fallbacks
+
+1. **Dependency on Password Managers:** This attack only works if the target actually uses a browser or extension that auto-fills passwords.
+2. **The Phishing Fallback:** If nothing gets auto-filled, attackers often fall back to on-site phishing—tricking the user with a realistic fake login prompt that forces them to type their credentials manually.
+
+---
+
+#### 🎯 Plain-English Breakdown of the Attack
+
+Think of this like setting a digital mousetrap for credentials:
+
+1. **The Plant:** Your XSS payload dynamically injects a password input field onto the target page.
+2. **The Auto-Fill Trigger:** The victim's password manager detects the field and automatically injects their saved login data.
+3. **The Snatch:** Your background script grabs the filled values (`.value`) from the input field.
+4. **The Exfiltration:** It beams the stolen username and password straight back to your server, giving you permanent access regardless of session timeouts or `HttpOnly` shields!
+
+### 🔄 Attack Style: CSRF Token Heist (Bypassing Anti-CSRF Defenses)
+
+**The Goal:** Defeat anti-CSRF tokens using XSS to execute a "two-way" attack, allowing you to steal hidden protection tokens, force unauthorized actions (like changing an account email), and lock the user out via a password reset.
+
+---
+
+#### 🧩 Concept: Turning a One-Way Street Into Two-Way Control
+
+* **The Traditional CSRF Limit:** Normal CSRF is a "one-way" attack—you can trick a victim's browser into sending a request, but you can't see the response or read hidden anti-CSRF tokens meant to protect the form.
+* **The XSS Advantage:** Because XSS executes JavaScript directly inside the victim's session, **CSRF tokens become completely useless**. JavaScript can inspect the page, read hidden form values, and extract those tokens instantly.
+* **The Takeover Chain:** If a website lets users change their email without re-entering their current password, an attacker can:
+1. Use XSS to fetch the settings page and steal the CSRF token.
+2. Use that token to change the victim's email to one controlled by the attacker.
+3. Trigger a password reset on the login page to take absolute ownership of the account.
+
+
+
+---
+
+#### 🛠️ The Attack Mechanism & Flow
+
+* **The Conceptual JavaScript Payload:**
+```javascript
+// Step 1: Fetch the sensitive page containing the hidden CSRF token
+fetch('/accountSettings').then(res => res.text()).then(html => {
+    // Step 2: Extract the CSRF token using a DOM parser or regex
+    let parser = new DOMParser();
+    let doc = parser.parseFromString(html, 'text/html');
+    let csrfToken = doc.querySelector('input[name="csrf"]').value;
+
+    // Step 3: Send a forged request to change the email using the stolen token
+    fetch('/accountSettings/update', {
+        method: 'POST',
+        body: 'csrf=' + csrfToken + '&email=attacker@evil.com'
+    });
+});
+
+```
+
+
+
+---
+
+#### 🎯 Plain-English Breakdown of the Attack
+
+Think of this like breaking into a high-security vault by subverting the alarm system:
+
+1. **The Secret Guard (CSRF Tokens):** The website uses unique, hidden tokens on every form to prove a request came from a genuine button click, blocking traditional forged attacks.
+2. **The Insider Threat (XSS):** Because your XSS script is running live inside the victim's browser, it doesn't need to guess the token; it can just read it straight off the DOM.
+3. **The Silent Takeover:** The script steals the token, quietly updates the account's email address behind the scenes, and triggers a password reset—all without the victim ever noticing until they are locked out!
