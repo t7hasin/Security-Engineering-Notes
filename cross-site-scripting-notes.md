@@ -1611,3 +1611,85 @@ Think of CSP like a high-security corporate building's entry protocol:
 1. **The Badge Checker:** The browser checks every script and image against a strict guest list provided by the server (`Content-Security-Policy`).
 2. **The Cryptographic Lock:** If a script doesn't have the correct rotating passcode (nonce) or fingerprint (hash), the browser refuses to let it run.
 3. **The Blind Spots:** Even if the guards check every script at the front door, side-doors like image tags or user-clicked links are sometimes left unguarded, giving attackers creative ways to leak data anyway!
+
+### 🛡️ Defense Style: Mitigating Dangling Markup via CSP (Locking Down Image Exfiltration)
+
+**The Goal:** Shut down automated data exfiltration vectors by restricting where the browser is allowed to load images or external assets.
+
+---
+
+#### 🧩 Concept: Restricting the Exfiltration Channel
+
+* **The Defense Tool (`img-src`):** Since attackers rely heavily on image tags to silently phone home with stolen page data, you can use the `img-src` CSP directive to control where images can originate.
+* **The Rules:**
+* `img-src 'self'` $\rightarrow$ Only allow images from the website's own origin.
+* `img-src [https://images.normal-website.com](https://images.normal-website.com)` $\rightarrow$ Only allow images from a specific trusted domain.
+
+
+* **Why It Works:** By locking down image loads, you instantly neutralize the easiest, zero-click method attackers use to execute dangling markup injections and exfiltrate sensitive tokens.
+
+---
+
+#### ⚠️ The Limitation: Why It's Not a Silver Bullet
+
+1. **The Pivot to Interactive Tags:** Restricting `img-src` stops *automated* image-based leaks, but it doesn't fix the underlying injection flaw.
+2. **Anchor Tags & User Interaction:** An attacker can easily switch tactics—abandoning image tags and instead injecting an anchor (`<a>`) tag with a dangling `href` attribute. While this usually requires the user to actually click the link to trigger the data leak, it completely bypasses strict `img-src` policies!
+
+---
+
+#### 🎯 Plain-English Breakdown of the Defense
+
+Think of this like securing a building against data theft:
+
+1. **Blocking the Secret Chute:** Restricting image sources closes off the easiest automated delivery chute (the `<img src>` tag) that attackers use to quietly smuggle data out of the network.
+2. **The Leftover Gap:** Even with the chute sealed, the doors (like clickable links and anchor tags) might still be open. If an attacker can't force the data out automatically, they can craft a trap that waits for an unsuspecting user to click, proving that CSP mitigates risk but rarely replaces secure input escaping!
+
+### 💉 Attack Style: CSP Policy Injection (The Header Overwrite)
+
+**The Goal:** Exploit reflection flaws inside security headers (like `report-uri`) to inject custom Content Security Policy rules, overwrite strict protections, and force the browser to execute your scripts.
+
+---
+
+#### 🧩 Concept: Turning the Defense Against Itself
+
+* **The Reflection Flaw:** Sometimes, a web application mistakenly reflects your user input directly into its own security response headers—most commonly at the very end of a `report-uri` directive.
+* **The Semicolon Weapon:** Because CSP directives are separated by semicolons, injecting a semicolon (`;`) allows you to prematurely end their policy and start appending your own custom rules!
+* **The Overwrite Obstacle & Chrome's Weakness:** Normally, if a CSP already defines a strict `script-src` policy, browsers won't let you override it with a second one. However, Chrome introduced `script-src-elem` (which controls script elements, though not inline events). Crucially, **this directive allows you to overwrite existing `script-src` rules**, giving you a window to completely disable their security guardrails.
+
+---
+
+#### 🛠️ The Attack Mechanism & How It Works
+
+* **Vulnerable Response Header Setup:**
+```http
+Content-Security-Policy: default-src 'self'; report-uri /logger?callback=YOUR_INPUT_HERE
+
+```
+
+
+* **The Payload / Injection Technique:**
+By injecting a semicolon followed by a lax script directive (utilizing Chrome's `script-src-elem` behavior):
+```text
+;script-src-elem *;
+
+```
+
+
+* **Resulting Header:**
+```http
+Content-Security-Policy: default-src 'self'; report-uri /logger?callback=;script-src-elem *;
+
+```
+
+
+
+---
+
+#### 🎯 Plain-English Breakdown of the Trick
+
+Think of this like forging a security policy update document:
+
+1. **The Target Spot:** You find an input field that gets copied straight into the server's HTTP security response header.
+2. **Breaking the Sentence:** You inject a semicolon (`;`) to cut off the application's original reporting rule and start writing your own commands.
+3. **Rewriting the Guardrails:** You leverage `script-src-elem` to override the page's strict script restrictions, replacing them with a wide-open policy (`*`).
+4. **The Execution:** With the strict CSP neutered or overwritten, your injected scripts bypass the browser's defenses and execute without obstruction!
