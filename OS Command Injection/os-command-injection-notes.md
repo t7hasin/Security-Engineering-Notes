@@ -439,3 +439,51 @@ Think of this like figuring out what kind of car someone drives by looking at th
 1. **Checking the Badges (Headers):** You look at the server's welcome banner in the HTTP response to see if it openly admits to running Windows IIS or Apache on Linux.
 2. **Testing the Rules (Case Sensitivity):** You tweak the capitalization of a URL. If the server throws a fit over a single capital letter, you know it's strict Linux; if it doesn't care, it's likely Windows.
 3. **Reading the Trash (Error Leaks):** If the app crashes or throws a verbose error, you scan the file paths for backslashes or forward slashes to instantly confirm whether you're dealing with a Linux filesystem or a Windows drive!
+
+### 🌐 How to Find the TTL Value (Terminal Guide)
+
+To check a target server's TTL (Time-to-Live) and figure out its operating system, you use the **`ping`** command directly inside your terminal.
+
+---
+
+### 💻 The Commands
+
+* **For Linux / macOS:**
+```bash
+ping -c 4 targetwebsite.com
+
+```
+
+
+*(The `-c 4` tells it to stop after sending 4 packets so it doesn't run forever.)*
+* **For Windows:**
+```bash
+ping targetwebsite.com
+
+```
+
+
+*(Windows automatically stops after 4 packets by default.)*
+
+---
+
+### 🔍 What to Look For in the Output
+
+When you run the command, look at the results scrolling in your terminal. Find the part that says **`ttl=`**:
+
+```bash
+64 bytes from 192.0.2.1: icmp_seq=1 ttl=54 time=14.2 ms
+
+```
+
+👉 *Here, the returned value is `ttl=54`.*
+
+---
+
+### 🧠 Quick OS Cheat Sheet
+
+Because packets lose a few numbers as they bounce across internet routers, the number you see will be slightly lower than the OS's **original starting value**:
+
+* 🐧 **Linux / Unix:** Usually starts at **64** (If you see `ttl=50` to `64`, it's Linux).
+* 🪟 **Windows:** Usually starts at **128** (If you see `ttl=110` to `128`, it's Windows).
+* 🌐 **Routers / Cisco:** Usually starts at **255**.
