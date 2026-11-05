@@ -133,3 +133,544 @@ Think of this like a VIP event pass system:
 1. **The Base Paper Pass (JWT):** A standard paper badge template used to write down visitor details.
 2. **The Official Stamp (JWS):** The manager stamps the back of the pass with official ink so guards know it's authentic. If someone uses a pen to change their role from "Guest" to "Admin", the ink stamp won't match anymore.
 3. **The Lazy Guard or Stolen Stamp (The Vulnerability):** Security breaks down if the guard gets lazy and stops checking the stamp entirely, or if an attacker sneaks into the office and steals the manager's official ink stamp (the leaked secret key). Once that happens, anyone can print and stamp any fake pass they want and walk right into the restricted zones!
+
+### 🔐 Attack Style: Flawed JWT Signature Verification & Skipping Checks (The Unguarded Tamper Pass)
+
+**The Goal:** Modify sensitive self-contained token data (like your username or admin privileges) to impersonate other users or escalate your access when a server fails to verify cryptographic signatures.
+
+---
+
+### 🧩 Concept: Self-Contained Tokens Without Memory
+
+* **The Stateless Design:** Servers don't store JWT records in a database; every token is a standalone credential containing its own data (claims).
+* **The Verification Blind Spot:** Because the server doesn't keep a master copy of original tokens, it relies entirely on checking the cryptographic signature. If developers implement signature checks incorrectly—or skip them entirely—the server blindly trusts whatever modifications an attacker makes inside the token payload.
+* **The Developer Confusion Trap:** Popular coding libraries provide separate functions for checking signatures (`verify()`) versus simply reading text (`decode()`). Insecure applications occasionally call `decode()` instead of `verify()`, effectively turning off signature security completely.
+
+---
+
+### 🛠️ How the Attack Works
+
+* **1. Inspecting the Token Claims:**
+* An attacker intercepts their session JWT and decodes the payload to reveal identity flags:
+
+
+```json
+{
+    "username": "carlos",
+    "isAdmin": false
+}
+
+```
+
+
+* **2. Tampering with the Data:**
+* The attacker modifies the claims directly, swapping `"carlos"` for `"administrator"` or changing `"isAdmin": false` to `"isAdmin": true`.
+
+
+* **3. Exploiting Missing Verification:**
+* The attacker sends the modified token back to the server. Because the server uses a flawed implementation or calls `decode()` instead of `verify()`, it ignores the broken cryptographic signature and accepts the modified payload as absolute truth.
+
+
+* **4. Privilege Escalation:**
+* The application grants the attacker full administrative access or logs them straight into the targeted victim's account.
+
+
+
+---
+
+### 🎯 Plain-English Breakdown of the Attack
+
+Think of this like altering a paper cinema ticket with a pencil:
+
+1. **The Self-Contained Ticket:** You are handed a paper movie ticket that prints your seat number and access tier directly onto the stub, with no digital barcode scanner linked back to the main box office computer.
+2. **The Pencil Modification:** You take a pencil and erase your regular balcony seat number, writing in "Front-Row VIP Suite" instead.
+3. **The Confused Gatekeeper:** The ticket collector takes your ticket, glances at it, and fails to check if the official security stamp is valid (or accidentally uses a basic reading glass instead of a proper validation tool).
+4. **Walking Into the VIP Lounge:** Believing your pencil handwriting, the gatekeeper lets you walk right past the velvet ropes into the exclusive VIP section!
+
+### 🔐 Attack Style: Unsigned JWTs & The `none` Algorithm (The Self-Signed VIP Pass)
+
+**The Goal:** Trick the server into accepting a fake or modified token by changing the algorithm header to `none`, completely turning off signature verification.
+
+---
+
+### 🧩 Concept: Letting the Fox Guard the Henhouse
+
+* **The Dangerous Header (`alg`):** A JWT starts with a header telling the server *how* it was signed (for example, `"alg": "HS256"`).
+* **Trusting the Untrusted:** The server has to read this header *before* it verifies the signature. This means an attacker gets to tell the server: *"Hey, don't check my signature for this token!"*
+* **The `none` Trick:** Attackers can change the algorithm to `"alg": "none"`, removing the signature entirely while modifying the payload data (like changing `isAdmin: false` to `true`).
+* **Bypassing Filters:** Modern servers often try to block `none`, but hackers can use messy spelling or weird letter tricks (like `None`, `NONE`, or encoded tricks) to sneak past the security filters.
+
+---
+
+### 🛠️ How the Attack Works
+
+* **1. Intercepting the Token:**
+* You capture your normal session token, which has a header looking like this:
+
+
+```json
+{
+    "alg": "HS256",
+    "typ": "JWT"
+}
+
+```
+
+
+* **2. Swapping the Algorithm:**
+* You change `"alg": "HS256"` to `"alg": "none"` and change your data to claim you are an admin.
+
+
+* **3. Dropping the Signature:**
+* Because there is no signature anymore, you strip it off the end, leaving just the header and payload separated by a dot (plus a trailing dot at the very end).
+
+
+* **4. Sending the Fake Token:**
+* The server reads `"alg": "none"`, thinks it doesn't need to check any math, and blindly grants you admin access!
+
+
+
+---
+
+### 🎯 Plain-English Breakdown of the Attack
+
+Think of this like writing your own permission slip and signing it yourself:
+
+1. **The Official Note:** Normally, your school principal hands you a note stamped with an official wax seal.
+2. **Writing Your Own Note:** You grab a blank paper, write out an upgraded pass ("Let this student leave early"), and at the bottom where the principal's signature should go, you write: **"Algorithm: None (No signature needed)"**.
+3. **Tricking the Guard:** You hand the note to the school guard. Because the guard is lazy and follows the instruction *literally*, they see "No signature needed," skip checking for the official wax seal, and wave you right through the front gates!
+
+### 🔐 Attack Style: Brute-Forcing JWT Secret Keys (Guessing the Master Password)
+
+**The Goal:** Crack a weak secret key used to sign JWTs so you can forge your own valid signatures and trick the server into believing any fake data you create.
+
+---
+
+### 🧩 Concept: The Danger of Weak Signing Keys
+
+* **How HMAC Signatures Work:** Algorithms like `HS256` use a shared secret string (like a password) to lock the JWT signature. Anyone with that secret key can generate a 100% valid, trusted signature for any data they want.
+* **The Developer Slip-Up:** Developers often make major mistakes by leaving weak, default, or copy-pasted example secrets (like `"secret"` or `"password123"`) in their live applications.
+* **Cracking It Locally:** Because guessing the key happens entirely on your own computer (offline), tools can run millions of guesses per second without alerting the target server.
+
+---
+
+### 🛠️ How the Attack Works
+
+* **1. Collecting the Ingredients:**
+* You grab a single valid, signed JWT captured from the target website and a text file containing a list of common passwords/secrets (a wordlist).
+
+
+* **2. Running Hashcat:**
+* You fire up Kali Linux and run `hashcat` with the correct attack mode (`-m 16500` specifically tells it to crack JWT signatures):
+
+
+```bash
+hashcat -a 0 -m 16500 <jwt> <wordlist>
+
+```
+
+
+* **3. The Brute-Force Match:**
+* Hashcat uses every word in the list to sign your token's header and payload, comparing each result against the server's real signature until it finds a match.
+
+
+* **4. Forging Your Own Tokens:**
+* Once hashcat spits out the cracked secret, you can modify your token claims (like changing `isAdmin: false` to `true`), sign it using that exact secret, and send it to the server with absolute authority!
+
+
+
+---
+
+### 🎯 Plain-English Breakdown of the Attack
+
+Think of this like cracking a cheap padlock using a master list of common numbers:
+
+1. **The Locked Box:** The server locks every passport with a secret stamp made by a small handheld stamper.
+2. **The Lazy Locksmith:** Instead of using a long, complex master phrase, the website creator used a lazy, obvious password like `"secret123"` found in a coding tutorial.
+3. **The Guessing Machine:** You feed a single captured passport into your fast computer program. It rapidly stamps millions of test words against the passport until it finds the exact phrase that matches the stamp.
+4. **Forging the Stamps:** Once your computer reveals the secret word, you can stamp as many fake VIP passes as you want, and the security guards will never know the difference!
+
+### 🔐 Attack Style: JWT Header Parameter Injection & The `jwk` Exploit (Smuggling Your Own Master Key)
+
+**The Goal:** Trick a server into trusting a forged token by embedding your own public cryptographic key directly inside the token's header (`jwk` parameter) and signing it with your matching private key.
+
+---
+
+### 🧩 Concept: When Servers Trust the Keys Handed to Them
+
+* **The Helper Headers:** JWT headers don't just hold the algorithm (`alg`); they can also contain instruction parameters telling the server *where* or *how* to find the signing key. These include `jwk` (an embedded key object), `jku` (a URL pointing to keys), and `kid` (a key ID).
+* **The Fatal Misconfiguration:** Secure servers should only use a strict, pre-approved list of keys stored safely on their own backend. Insecure servers, however, blindly trust whatever key is handed to them inside the incoming token's header.
+* **Creating a Custom Keypair:** Since asymmetric algorithms (like `RS256`) use a **private key** to sign and a **public key** to verify, an attacker can generate their own pair, sign a modified token with their private key, and smuggle their public key inside the `jwk` header.
+
+---
+
+### 🛠️ How the Attack Works
+
+* **1. Generating a Custom Keypair:**
+* You create a brand-new RSA public/private keypair using tools like Burp Suite's JWT Editor extension.
+
+
+* **2. Modifying the Token Payload:**
+* You edit the token claims to grant yourself privileges (e.g., changing `"isAdmin": false` to `true`).
+
+
+* **3. Injecting the Public Key (`jwk`):**
+* You add a `jwk` header containing your public key details directly into the token header, ensuring the `kid` values match:
+
+
+```json
+{
+    "alg": "RS256",
+    "kid": "attacker-key-1",
+    "jwk": {
+        "kty": "RSA",
+        "e": "AQAB",
+        "n": "your-attacker-public-modulus..."
+    }
+}
+
+```
+
+
+* **4. Re-Signing and Sending:**
+* You sign the modified token using your private key. When you send it to the server, the vulnerable application looks at the `jwk` header, extracts your injected public key, uses it to verify the signature (which successfully passes because you signed it with your private key), and grants you full access!
+
+
+
+---
+
+### 🎯 Plain-English Breakdown of the Attack
+
+Think of this like bringing your own customized padlock and key to a high-security storage locker:
+
+1. **The Official Lock System:** Normally, the locker facility installs their own master locks and keeps the only matching keys in the front office.
+2. **The Lazy Facility Manager:** A poorly managed facility lets customers bring their *own* padlocks and trusts whatever lock is currently clipped onto the door.
+3. **Swapping the Lock:** You walk up to your locker, remove the facility's lock, and snap on a padlock you bought at the hardware store, keeping the matching master key in your pocket.
+4. **Entering at Will:** When the security guard walks by to check your locker, they test the door against *your* padlock instead of the official master key. Since your lock clicks open cleanly with your personal key, the guard assumes everything is fully authorized and lets you take whatever you want!
+
+### 🔐 Attack Style: JWT `jku` Header Injection (Pointing to Your Own Remote Key File)
+
+**The Goal:** Trick the server into downloading your public cryptographic key from a website you control (via the `jku` parameter) so it validates a forged token you signed with your private key.
+
+---
+
+### 🧩 Concept: Pointing the Guard to Your Own Key Directory
+
+* **The Remote Key List (`jku`):** Instead of stuffing the public key directly inside the token header (`jwk`), the `jku` (JSON Web Key Set URL) header tells the server: *"Go fetch the approved key list from this web address."*
+* **The Blind Fetch Flaw:** Secure servers only download key lists from rigid, hardcoded company domains. Insecure servers, however, will blindly visit *any* web URL listed inside the `jku` header to grab the verification key.
+* **Hosting Your Fake Keys:** You host a fake JSON key file on an external server you control, sign your modified token with your private key, and point the server to your remote URL so it approves your fake signature.
+
+---
+
+### 🛠️ How the Attack Works
+
+* **1. Setting Up Your Key Server:**
+* You create an RSA keypair and host a JWK Set JSON file containing your public key on a public server or exploit drop-off site you control:
+
+
+```json
+{
+    "keys": [
+        {
+            "kty": "RSA",
+            "e": "AQAB",
+            "kid": "my-attacker-key",
+            "n": "your-attacker-public-modulus..."
+        }
+    ]
+}
+
+```
+
+
+* **2. Modifying the Token:**
+* You edit your session token's payload to grant yourself admin rights (e.g., `"isAdmin": true`).
+
+
+* **3. Injecting the `jku` and `kid` Headers:**
+* You add the `jku` header pointing right to your hosted key file, matching the `kid` to your key:
+
+
+```json
+{
+    "alg": "RS256",
+    "kid": "my-attacker-key",
+    "jku": "https://evil-user.net/.well-known/jwks.json"
+}
+
+```
+
+
+* **4. Signing and Sending:**
+* You sign the token with your private key and send it. The server leaves its network, downloads your fake key file from your website, uses your public key to check the math, sees that it matches, and hands you admin access!
+
+
+
+---
+
+### 🎯 Plain-English Breakdown of the Attack
+
+Think of this like pointing a security guard to an unverified guest list hosted on your personal blog:
+
+1. **The Trusted Directory:** Normally, the building security desk checks IDs against an official phone book locked inside the main office.
+2. **The Gullible Desk Guard:** A poorly configured security system allows visitors to point to *any* online guest list directory when checking credentials.
+3. **Publishing a Fake Guest List:** You upload a digital document to your own personal website listing yourself as the VIP guest coordinator.
+4. **Checking Your Fake Source:** You hand the guard a pass and say, *"Check my credentials using the registry posted on my personal website blog."* The guard follows your link, reads your fake registry, believes it completely, and waves you straight into the restricted building!
+
+### 🔐 Attack Style: JWT `kid` Header Injection & Path Traversal (Smuggling a Fake Key via System Files)
+
+**The Goal:** Trick the server into using an empty or predictable system file (like `/dev/null`) as its cryptographic signing key by exploiting directory traversal inside the `kid` (Key ID) header.
+
+---
+
+### 🧩 Concept: Pointing the Key Identifier to Local Files
+
+* **What is the `kid` Parameter?** The `kid` (Key ID) header tells the server *which* specific key to grab from its database or storage when checking a token's signature.
+* **The Directory Traversal Flaw:** The JWS spec doesn't restrict `kid` to a safe database ID; developers often write code that blindly passes the string into file paths or database queries. If developers don't sanitize input, attackers can use dots and slashes (`../../`) to force the server to read arbitrary files from its own operating system.
+* **The `/dev/null` Trick:** If a server supports symmetric algorithms (like `HS256`) and lets you point `kid` to an empty system file like `/dev/null`, the server reads "nothing" (an empty string) as the secret key. You can then sign your forged token using an empty string, and the server will proudly verify and approve it!
+
+---
+
+### 🛠️ How the Attack Works
+
+* **1. Modifying the Token Payload:**
+* You edit the JWT claims to grant yourself administrative privileges (e.g., `"isAdmin": true`).
+
+
+* **2. Injecting the Traversal Payload into `kid`:**
+* You change the `kid` header to point to a predictable system file, such as an empty file or a static text file on the server:
+
+
+```json
+{
+    "alg": "HS256",
+    "typ": "JWT",
+    "kid": "../../../dev/null"
+}
+
+```
+
+
+* **3. Signing with the Matching Secret:**
+* Because `/dev/null` contains zero bytes (an empty string), you sign your modified token using an empty string (`""`) as your HMAC secret key.
+
+
+* **4. Sending the Forged Token:**
+* When the server receives the token, it follows your path traversal instruction, reads the empty contents of `/dev/null` to use as its verification key, checks your signature against that empty string, finds a match, and lets you in!
+
+
+
+---
+
+### 🎯 Plain-English Breakdown of the Attack
+
+Think of this like tampering with a library stamp code to point to a blank page:
+
+1. **The Official Stamp Registry:** Normally, the library stamp machine looks up a specific drawer ID number to find the official metal approval stamp.
+2. **Rewriting the Drawer Code:** Instead of using a valid ID number, you write a directory shortcut into the code slot: *"Go look inside the janitor's empty trash can in the basement (`../../dev/null`)."*
+3. **Using a Blank Stamper:** Because you know the trash can is completely empty, you stamp your forged permission slip using nothing at all (an invisible, blank press).
+4. **The Tricked Machine:** The automated gatekeeper follows your directory shortcut down to the empty trash can, grabs nothing, checks your blank stamp against it, says "Looks like a match!", and opens the doors wide for you!
+
+### 🔐 Attack Style: JWT SQL Injection & Alternative Header Exploits (Smuggling Payloads Through Database & Format Tricks)
+
+**The Goal:** Exploit database lookup flaws via the `kid` parameter or trigger secondary vulnerabilities (like XXE or deserialization) by manipulating obscure JWT headers like `cty` and `x5c`.
+
+---
+
+### 🧩 Concept: Hidden Attack Surfaces Inside Obscure Headers
+
+* **The Database Query Flaw (`kid` SQLi):** If a server looks up signing keys by querying a SQL database using the `kid` string, attackers can inject SQL commands into the Key ID header to manipulate database logic or steal other keys.
+* **The Content Type Trick (`cty`):** The optional `cty` header declares the payload's data type. If signature verification is already bypassed, changing this to data types like XML or serialized objects can force the backend parser into vulnerable secondary processing modes (like XXE or unsafe deserialization).
+* **The Certificate Chain Exploit (`x5c`):** Similar to embedding raw public keys via `jwk`, the `x5c` header lets attackers supply an entire X.509 certificate chain. Because parsing complex security certificates is historically fragile, poorly secured parsers can fall victim to code execution bugs.
+
+---
+
+### 🛠️ How the Attack Works
+
+* **1. Injecting SQL via `kid`:**
+* If the backend queries keys insecurely, you craft a SQL injection payload inside the `kid` header to force the database to return a predictable key or UNION-select a key of your choice:
+
+
+```json
+{
+    "alg": "HS256",
+    "kid": "C' UNION SELECT 'my-forced-secret'--",
+    "typ": "JWT"
+}
+
+```
+
+
+* **2. Abusing the Content Type (`cty`):**
+* After bypassing signature checks, you inject a custom content type header to trick the backend server into treating your JSON payload as an XML document or serialized object:
+
+
+```json
+{
+    "alg": "none",
+    "cty": "text/xml"
+}
+
+```
+
+
+* **3. Triggering Secondary Bugs:**
+* The server's internal parser receives the token, misinterprets the data format based on the `cty` or `x5c` header, and triggers a secondary vulnerability like XML External Entity (XXE) injection or remote code execution.
+
+
+
+---
+
+### 🎯 Plain-English Breakdown of the Attack
+
+Think of this like slipping hidden instructions into the label slot of an official file folder:
+
+1. **The Database Lookup Trap (`kid` SQLi):** Instead of typing a simple file folder name on your ID tag, you write a clever command that tricks the file clerk's computer search bar into pulling up whatever confidential records you want.
+2. **Changing the Content Label (`cty`):** Once you've slipped past the front desk, you slap a custom label onto your document folder that says: *"Warning: This is a complex engineering blueprint, not a regular text note."*
+3. **Tricking the Back-Room Machine:** The automated processing machine in the back room reads your fake label, decides to run it through a heavy-duty industrial parser, and accidentally crashes or opens up a security loophole because it processed the foreign data format incorrectly!
+
+### 🔐 Attack Style: Algorithm Confusion Attacks (Tricking the Locksmith with the Wrong Key Type)
+
+**The Goal:** Trick the server into treating its public verification key as a secret password, allowing you to forge a valid token signature using that public key.
+
+---
+
+### 🧩 Concept: Mixing Up Symmetric and Asymmetric Keys
+
+* **Two Different Locking Systems:**
+* **Symmetric (like HS256):** Uses *one single secret password* to both lock (sign) and unlock (verify) the token.
+* **Asymmetric (like RS256):** Uses a *private key* to lock, and a separate *public key* to unlock. The public key is shared with everyone.
+
+
+* **The Library Mix-Up:** Many coding libraries use a single, all-in-one verify function. It looks at the header (`alg`) to decide how to check the key.
+* **The Fatal Developer Flaw:** If a website is supposed to use RS256 (public key), but the developer writes code that blindly passes the public key into a flexible verification function, a huge loophole opens up. If you send an HS256 token, the server takes its own *public key* and treats it like a secret password to check your signature!
+
+---
+
+### 🛠️ How the Attack Works
+
+* **1. Stealing the Public Key:**
+* You find and download the website's public key (often found at `/jwks.json` or extracted from an error page).
+
+
+* **2. Modifying the Token:**
+* You edit your session token payload to make yourself an admin (e.g., `"isAdmin": true`).
+
+
+* **3. Swapping the Algorithm Header:**
+* You change the algorithm in the header from `"alg": "RS256"` to `"alg": "HS256"`.
+
+
+* **4. Signing with the Public Key:**
+* Instead of needing a secret password, you sign your modified token using the website's own **public key** (saved as a text string) as your HMAC secret key.
+
+
+* **5. Sending the Fake Token:**
+* When you send the token, the server's confused library sees `"alg": "HS256"`, grabs its own public key, uses it as a password, matches your signature, and lets you right in!
+
+
+
+---
+
+### 🎯 Plain-English Breakdown of the Attack
+
+Think of this like tricking a security guard who has two completely different doors:
+
+1. **The Two Doors:** The front gate uses an asymmetric system (a heavy vault key to lock, and a glass viewing window where anyone can look at the key pattern). The back door uses a simple symmetric system (everyone shares one secret clubhouse password).
+2. **The Lazy Locksmith:** The gatekeeper uses a universal lock machine that automatically adjusts based on what sign you tape to your package.
+3. **The Switcharoo:** You take the public viewing key from the front window, walk over to the back door, and use that exact public key layout as the "secret password" to sign your own fake permission slip.
+4. **The Confused Guard:** The guard sees your package labeled with an HS256 sign, takes the public key, mistakes it for the secret clubhouse password, says "Yep, this matches!", and hands you the VIP keys!
+
+### 🔐 Attack Style: Executing an Algorithm Confusion Attack (Step-by-Step Forgery)
+
+**The Goal:** Steal the server's public key, convert it into the exact byte-for-byte secret format required, and use it to sign a forged JWT with the `HS256` algorithm.
+
+---
+
+### 🧩 Concept: Preparing the Wrong Key for the Right Trick
+
+* **The Blueprint Steps:** To pull off an algorithm confusion attack, you need four concrete actions: find the public key, reformat it into an identical local copy, edit your user data payload, and lock it using `HS256` with the public key acting as your password.
+* **The Format Matching Trap:** Computers are extremely picky. If your signature key is missing a single invisible newline or character format, the verification will fail. You must match the server's backend file format (like X.509 PEM) precisely.
+
+---
+
+### 🛠️ How to Perform the Attack (Step-by-Step)
+
+* **Step 1 - Steal the Server's Public Key:**
+* Hunt for the key on public endpoints like `/jwks.json` or `/.well-known/jwks.json`, or extract it from application response files.
+
+
+* **Step 2 - Convert to the Exact PEM Format:**
+* Take the raw JWK object, paste it into tools like Burp Suite's JWT Editor, and convert it into X.509 PEM text format.
+* Base64-encode that text string and save it as a new symmetric key (`k` parameter) so your tool knows to use it as an HMAC secret.
+
+
+* **Step 3 - Modify Your JWT Payload:**
+* Take your session token, edit the user claims (e.g., changing `"isAdmin": false` to `true`), and change the header from `"alg": "RS256"` to `"alg": "HS256"`.
+
+
+* **Step 4 - Sign the Token with the Public Key:**
+* Sign your modified token using `HS256`, feeding the Base64-encoded public key string in as your secret password. Send it off to the server and watch it grant you full access!
+
+
+
+---
+
+### 🎯 Plain-English Breakdown of the Attack
+
+Think of this like copying the front-window display key, melting it down into a handheld tool, and using it to pick the back door:
+
+1. **Grabbing the Public Key:** You look through the store's glass display window and copy down the exact shape and dimensions of their master public key layout.
+2. **Shaping the Copy:** You take those measurements back to your workshop, file down a blank metal key until it matches their exact digital format (PEM style), and polish it clean.
+3. **Writing the Fake Pass:** You fill out a VIP visitor slip, change your status to "General Manager," and write **HS256** at the top.
+4. **Unlocking the Back Door:** You take your newly crafted public key tool, use it as the password to stamp your pass, hand it to the lazy back-door guard, and walk straight into the executive suite!
+
+### 🔐 Attack Style: Deriving Public Keys from Tokens (Math Magic for Missing Keys)
+
+**The Goal:** Calculate and recover a server's hidden public cryptographic key by mathematically comparing two different signed JWTs using automated tools.
+
+---
+
+### 🧩 Concept: Solving the Mathematical Puzzle from Token Clues
+
+* **When Keys are Hidden:** What happens if a server doesn't expose its public key at `/jwks.json`? You can still find it if you have access to two different JWTs signed by the server.
+* **The RSA Modulus ($n$):** Without diving into heavy math, asymmetric tokens rely on a shared mathematical value called $n$ (the modulus). By comparing two tokens signed with the same private key, mathematical scripts can reverse-engineer and calculate what $n$ must be.
+* **Automated Forgery:** Tools like PortSwigger's `sig2n` Docker container do the heavy lifting for you—taking your two tokens, doing the math, spitting out a few candidate PEM keys, and even pre-signing test tokens for you to try out!
+
+---
+
+### 🛠️ How the Attack Works
+
+* **1. Collecting Two Signed Tokens:**
+* Grab any two valid, signed JWTs issued by the target server (for example, by logging in twice or capturing tokens from different user sessions).
+
+
+* **2. Running the Extraction Tool:**
+* Fire up Docker in your terminal and pass both tokens into the automated script:
+
+
+```bash
+docker run --rm -it portswigger/sig2n <token1> <token2>
+
+```
+
+
+* **3. Generating Candidate Keys:**
+* The tool crunches the numbers and outputs a few possible PEM-formatted public keys along with pre-signed test tokens for each candidate.
+
+
+* **4. Testing in Burp Repeater:**
+* Send each forged token one by one in Burp Repeater. Only **one** of them will unlock the server; once you find the winning token, you've successfully identified the exact public key needed to launch your full algorithm confusion attack!
+
+
+
+---
+
+### 🎯 Plain-English Breakdown of the Attack
+
+Think of this like figuring out a secret stamp design by comparing two official documents:
+
+1. **The Missing Blueprint:** The main vault's blueprint is locked away and you aren't allowed to look at it.
+2. **Comparing Two Stamped Receipts:** You manage to grab two separate receipts stamped by the same machine. Even though the text is different, the underlying ink press mechanics leave identical physical markers.
+3. **The Math Machine:** You feed both receipts into a smart computer analyzer. It calculates the exact dimensions of the hidden stamp plate and prints out a few replica molds.
+4. **Trying the Replicas:** You test out your replica stamps on the back door until one clicks open. Success—you've reverse-engineered the master stamp without ever seeing the original!
